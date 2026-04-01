@@ -26,7 +26,6 @@ type postgresRepository struct {
 func New(conf config.Postgres) (*postgresRepository, error) {
 	url := fmt.Sprintf(
 		"postgresql://%v:%v@%v:%v/%v?sslmode=disable", conf.User, conf.Pass, conf.Host, conf.Port, conf.DB)
-
 	db, err := sql.Open("postgres", url)
 	if err != nil {
 		return nil, fmt.Errorf("sql.Open: %v", err)
@@ -184,7 +183,7 @@ func (pr postgresRepository) CreateBoard(p context.Context, name string, descrip
 	return pr.GetBoard(p, strconv.Itoa(boardId))
 }
 
-func (pr postgresRepository) DeleteBoard(p context.Context, id string) (interface{}, error) {
+func (pr postgresRepository) DeleteBoard(p context.Context, id string) (bool, error) {
 	stmt, err := pr.db.Prepare("UPDATE posts.boards SET deleted_at = NOW() WHERE id = $1")
 	if err != nil {
 		return false, err
@@ -198,7 +197,7 @@ func (pr postgresRepository) DeleteBoard(p context.Context, id string) (interfac
 	return true, nil
 }
 
-func (pr postgresRepository) RestoreBoard(p context.Context, id string) (interface{}, error) {
+func (pr postgresRepository) RestoreBoard(p context.Context, id string) (bool, error) {
 	stmt, err := pr.db.Prepare("UPDATE posts.boards SET deleted_at = NULL WHERE id = $1")
 	if err != nil {
 		return false, err
@@ -224,7 +223,7 @@ func (pr postgresRepository) CreatePost(p context.Context, boardId string, title
 	return pr.GetPost(p, strconv.Itoa(postId))
 }
 
-func (pr postgresRepository) DeletePost(p context.Context, id string) (interface{}, error) {
+func (pr postgresRepository) DeletePost(p context.Context, id string) (bool, error) {
 	stmt, err := pr.db.Prepare("UPDATE posts.posts SET deleted_at = NOW() WHERE id = $1")
 	if err != nil {
 		return false, err
@@ -250,7 +249,7 @@ func (pr postgresRepository) CreateComment(p context.Context, postID string, tex
 	return pr.GetComment(p, strconv.Itoa(commentId))
 }
 
-func (pr postgresRepository) DeleteComment(p context.Context, id string) (interface{}, error) {
+func (pr postgresRepository) DeleteComment(p context.Context, id string) (bool, error) {
 	stmt, err := pr.db.Prepare("UPDATE posts.comments SET deleted_at = NOW() WHERE id = $1")
 	if err != nil {
 		return false, err
