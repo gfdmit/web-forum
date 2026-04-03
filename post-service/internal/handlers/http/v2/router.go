@@ -16,12 +16,12 @@ func New(svc *service.Service) (*gin.Engine, error) {
 	)
 
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposeHeaders:    []string{"Link"},
+		AllowOrigins:     []string{"http://localhost:3030"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
+		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: false,
-		MaxAge:           300 * time.Second,
+		MaxAge:           2 * time.Hour,
 	}))
 
 	restHandler, err := rest.New(svc)
@@ -29,7 +29,7 @@ func New(svc *service.Service) (*gin.Engine, error) {
 		return nil, err
 	}
 
-	apiGroup := router.Group("/api/v1")
+	apiGroup := router.Group("/api/v2")
 	{
 		apiGroup.Use(gin.Logger())
 
