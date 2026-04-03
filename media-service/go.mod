@@ -1,4 +1,4 @@
-module github.com/gfdmit/web-forum/post-service
+module github.com/gfdmit/web-forum/media-service
 
 go 1.23.5
 

@@ -1,6 +1,3 @@
-run:
-	go run cmd/main.go
-
 up:
 	docker compose --env-file .env up -d
 
@@ -15,6 +12,3 @@ stop:
 
 down:
 	docker compose down
-
-clean:
-	docker volume rm posts_postgres_data

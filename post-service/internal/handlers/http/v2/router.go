@@ -16,7 +16,7 @@ func New(svc *service.Service) (*gin.Engine, error) {
 	)
 
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3030"},
+		AllowOrigins:     []string{"http://localhost:8080"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},

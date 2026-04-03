@@ -1,0 +1,56 @@
+version: '3'
+
+networks:
+  app-network:
+    driver: bridge
+
+services:
+  posts:
+    container_name: posts
+    restart: unless-stopped
+    build:
+      context: ./post-service
+      dockerfile: deploy/Dockerfile
+    env_file: './post-service/.env'
+    ports:
+      - ${POSTSERVICE_PORT}:${POSTSERVICE_PORT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  postgres:
+    container_name: postgres
+    restart: unless-stopped
+    image: postgres:latest
+    env_file: './post-service/.env'
+    expose:
+      - ${POSTGRES_PORT}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
+
+  api-gateway:
+    container_name: api-gateway
+    restart: unless-stopped
+    build:
+      context: ./api-gateway
+      dockerfile: deploy/Dockerfile
+    env_file: './api-gateway/.env'
+    ports:
+      - ${APIGATEWAY_PORT}:${APIGATEWAY_PORT}
+    depends_on:
+      - posts
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+    driver: local
