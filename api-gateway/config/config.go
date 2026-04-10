@@ -10,18 +10,29 @@ import (
 
 type Config struct {
 	PostService
+	AuthService
 	//MediaService
 	HTTPServer
 }
 
 type PostService struct {
 	Host string `env:"POSTSERVICE_HOST" env-default:"localhost"`
-	Port string `env:"POSTSERVICE_PORT" env-default:"8080"`
+	Port string `env:"POSTSERVICE_PORT" env-default:"3000"`
+}
+
+type AuthService struct {
+	Host string `env:"AUTHSERVICE_HOST" env-default:"localhost"`
+	Port string `env:"AUTHSERVICE_PORT" env-default:"4000"`
+	JWT
+}
+
+type JWT struct {
+	Secret string `env:"JWT_SECRET" env-required:"true"`
 }
 
 type HTTPServer struct {
 	BindAddress     string        `env:"BIND_ADDRESS" env-default:"localhost"`
-	BindPort        string        `env:"BIND_PORT" env-default:"3030"`
+	BindPort        string        `env:"BIND_PORT" env-default:"8080"`
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" env-default:"5s"`
 	ReadTimeout     time.Duration `env:"READ_TIMEOUT" env-default:"5s"`
 	WriteTimeout    time.Duration `env:"WRITE_TIMEOUT" env-default:"5s"`

@@ -3,17 +3,20 @@ package rest
 import (
 	"net/http"
 
+	"github.com/gfdmit/web-forum/auth-service/config"
 	"github.com/gfdmit/web-forum/auth-service/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 type restHandler struct {
-	svc *service.Service
+	conf *config.JWT
+	svc  *service.Service
 }
 
-func New(svc *service.Service) *restHandler {
+func New(conf *config.JWT, svc *service.Service) *restHandler {
 	return &restHandler{
-		svc: svc,
+		conf: conf,
+		svc:  svc,
 	}
 }
 
@@ -33,6 +36,6 @@ func (rh *restHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
-
-	c.JSON(http.StatusOK, gin.H{"token": token})
+	c.SetCookie("token", token, int(rh.conf.TTL.Seconds()), "/", "", false, true)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

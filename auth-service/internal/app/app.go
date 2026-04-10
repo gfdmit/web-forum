@@ -21,7 +21,7 @@ func Run(conf *config.Config) error {
 
 	service := service.New(&conf.JWT, repo)
 
-	handler, err := v1.New(service)
+	handler, err := v1.New(&conf.JWT, service)
 	if err != nil {
 		return fmt.Errorf("error when setting up handler: %v", err)
 	}

@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS forum.users (
 
 CREATE TABLE IF NOT EXISTS forum.profiles (
     id              BIGSERIAL PRIMARY KEY,
-    user_id         BIGINT NOT NULL REFERENCES forum.users(id) ON DELETE CASCADE,
+    user_id         BIGINT NOT NULL UNIQUE REFERENCES forum.users(id) ON DELETE CASCADE,
     university_id   TEXT NOT NULL UNIQUE,
     firstname       TEXT NOT NULL,
     lastname        TEXT NOT NULL,

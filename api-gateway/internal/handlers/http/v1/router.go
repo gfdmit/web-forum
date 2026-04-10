@@ -12,9 +12,7 @@ import (
 )
 
 func New(conf *config.Config) (*gin.Engine, error) {
-	var (
-		router = gin.New()
-	)
+	router := gin.New()
 
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
@@ -25,37 +23,51 @@ func New(conf *config.Config) (*gin.Engine, error) {
 		MaxAge:           2 * time.Hour,
 	}))
 
+	postProxy, err := proxy.New(fmt.Sprintf("http://%s:%s", conf.PostService.Host, conf.PostService.Port))
+	if err != nil {
+		return nil, fmt.Errorf("error when setup router: %v", err)
+	}
+
+	authProxy, err := proxy.New(fmt.Sprintf("http://%s:%s", conf.AuthService.Host, conf.AuthService.Port))
+	if err != nil {
+		return nil, fmt.Errorf("error when setup router: %v", err)
+	}
+
 	api := router.Group("/api/v1")
+	api.Use(gin.Logger())
+
+	public := api.Group("")
 	{
-		api.Use(gin.Logger())
+		public.POST("/auth/login", authProxy.Forward())
 
-		postGroup := api.Group("")
-		{
-			postProxy, err := proxy.New(fmt.Sprintf("http://%s:%s", conf.PostService.Host, conf.PostService.Port))
-			if err != nil {
-				return nil, fmt.Errorf("error when setup router: %v", err)
-			}
-			postGroup.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
+		public.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
 
-			postGroup.GET("/boards", postProxy.Forward())
-			postGroup.GET("/boards/:id", postProxy.Forward())
-			postGroup.POST("/boards", postProxy.Forward())
-			postGroup.DELETE("/boards/:id", postProxy.Forward())
-			postGroup.POST("/boards/:id/restore", postProxy.Forward())
+		public.GET("/ping", postProxy.Forward())
 
-			postGroup.GET("/boards/:id/posts", postProxy.Forward())
-			postGroup.GET("/posts/:id", postProxy.Forward())
-			postGroup.POST("/posts", postProxy.Forward())
-			postGroup.DELETE("/posts/:id", postProxy.Forward())
+		public.GET("/boards", postProxy.Forward())
+		public.GET("/boards/:id", postProxy.Forward())
 
-			postGroup.GET("/posts/:id/comments", postProxy.Forward())
-			postGroup.GET("/comments/:id", postProxy.Forward())
-			postGroup.POST("/comments", postProxy.Forward())
-			postGroup.DELETE("/comments/:id", postProxy.Forward())
+		public.GET("/boards/:id/posts", postProxy.Forward())
+		public.GET("/posts/:id", postProxy.Forward())
 
-			postGroup.GET("/ping", postProxy.Forward())
-		}
+		public.GET("/posts/:id/comments", postProxy.Forward())
+		public.GET("/comments/:id", postProxy.Forward())
+	}
 
+	protected := api.Group("")
+	{
+		protected.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
+		protected.Use(middleware.Auth(conf.JWT.Secret))
+
+		protected.POST("/boards", postProxy.Forward())
+		protected.DELETE("/boards/:id", postProxy.Forward())
+		protected.POST("/boards/:id/restore", postProxy.Forward())
+
+		protected.POST("/posts", postProxy.Forward())
+		protected.DELETE("/posts/:id", postProxy.Forward())
+
+		protected.POST("/comments", postProxy.Forward())
+		protected.DELETE("/comments/:id", postProxy.Forward())
 	}
 
 	return router, nil

@@ -4,13 +4,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gfdmit/web-forum/auth-service/config"
 	"github.com/gfdmit/web-forum/auth-service/internal/handlers/http/v1/rest"
 	"github.com/gfdmit/web-forum/auth-service/internal/service"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
-func New(svc *service.Service) (*gin.Engine, error) {
+func New(conf *config.JWT, svc *service.Service) (*gin.Engine, error) {
 	var (
 		router = gin.New()
 	)
@@ -24,7 +25,7 @@ func New(svc *service.Service) (*gin.Engine, error) {
 		MaxAge:           2 * time.Hour,
 	}))
 
-	restHandler := rest.New(svc)
+	restHandler := rest.New(conf, svc)
 
 	apiGroup := router.Group("/api/v1")
 	{

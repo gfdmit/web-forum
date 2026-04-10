@@ -51,6 +51,22 @@ services:
     networks:
       - app-network
 
+  auth:
+    container_name: auth
+    restart: unless-stopped
+    build:
+      context: ./auth-service
+      dockerfile: deploy/Dockerfile
+      network: host
+    env_file: './auth-service/.env'
+    ports:
+      - ${AUTHSERVICE_PORT}:${AUTHSERVICE_PORT}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
 volumes:
   postgres_data:
     driver: local
