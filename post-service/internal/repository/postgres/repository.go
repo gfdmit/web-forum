@@ -2,9 +2,7 @@ package postgres
 
 import (
 	"context"
-	"crypto/sha1"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -61,7 +59,7 @@ func New(conf config.Postgres) (*postgresRepository, error) {
 
 func (pr postgresRepository) GetBoard(p context.Context, id string) (interface{}, error) {
 	board := &repository.Board{}
-	err := pr.db.QueryRow("SELECT * FROM posts.boards WHERE id = $1", id).Scan(
+	err := pr.db.QueryRow("SELECT * FROM forum.boards WHERE id = $1", id).Scan(
 		&board.ID, &board.Name, &board.Description, &board.CreatedAt, &board.DeletedAt)
 	if err != nil {
 		return nil, err
@@ -76,9 +74,9 @@ func (pr postgresRepository) GetBoards(p context.Context, includeDeleted bool) (
 		err  error
 	)
 	if includeDeleted {
-		rows, err = pr.db.Query("SELECT * FROM posts.boards")
+		rows, err = pr.db.Query("SELECT * FROM forum.boards")
 	} else {
-		rows, err = pr.db.Query("SELECT * FROM posts.boards WHERE deleted_at IS NULL")
+		rows, err = pr.db.Query("SELECT * FROM forum.boards WHERE deleted_at IS NULL")
 	}
 	if err != nil {
 		return nil, err
@@ -98,8 +96,8 @@ func (pr postgresRepository) GetBoards(p context.Context, includeDeleted bool) (
 
 func (pr postgresRepository) GetPost(p context.Context, id string) (interface{}, error) {
 	post := &repository.Post{}
-	err := pr.db.QueryRow("SELECT * FROM posts.posts WHERE id = $1", id).Scan(
-		&post.ID, &post.BoardID, &post.Title, &post.Text, &post.HashIP, &post.CreatedAt, &post.DeletedAt)
+	err := pr.db.QueryRow("SELECT * FROM forum.posts WHERE id = $1", id).Scan(
+		&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &post.DeletedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -113,9 +111,9 @@ func (pr postgresRepository) GetPosts(p context.Context, boardID string, include
 		err  error
 	)
 	if includeDeleted {
-		rows, err = pr.db.Query("SELECT * FROM posts.posts WHERE board_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", boardID, limit, offset)
+		rows, err = pr.db.Query("SELECT * FROM forum.posts WHERE board_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", boardID, limit, offset)
 	} else {
-		rows, err = pr.db.Query("SELECT * FROM posts.posts WHERE deleted_at IS NULL AND board_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", boardID, limit, offset)
+		rows, err = pr.db.Query("SELECT * FROM forum.posts WHERE deleted_at IS NULL AND board_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", boardID, limit, offset)
 	}
 	if err != nil {
 		return nil, err
@@ -125,7 +123,7 @@ func (pr postgresRepository) GetPosts(p context.Context, boardID string, include
 	for rows.Next() {
 		post := repository.Post{}
 		err = rows.Scan(
-			&post.ID, &post.BoardID, &post.Title, &post.Text, &post.HashIP, &post.CreatedAt, &post.DeletedAt)
+			&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &post.DeletedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -136,8 +134,8 @@ func (pr postgresRepository) GetPosts(p context.Context, boardID string, include
 
 func (pr postgresRepository) GetComment(p context.Context, id string) (interface{}, error) {
 	comment := &repository.Comment{}
-	err := pr.db.QueryRow("SELECT * FROM posts.comments WHERE id = $1", id).Scan(
-		&comment.ID, &comment.PostID, &comment.Text, &comment.HashIP, &comment.CreatedAt, &comment.DeletedAt)
+	err := pr.db.QueryRow("SELECT * FROM forum.comments WHERE id = $1", id).Scan(
+		&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &comment.DeletedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +149,9 @@ func (pr postgresRepository) GetComments(p context.Context, postID string, inclu
 		err  error
 	)
 	if includeDeleted {
-		rows, err = pr.db.Query("SELECT * FROM posts.comments WHERE post_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", postID, limit, offset)
+		rows, err = pr.db.Query("SELECT * FROM forum.comments WHERE post_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", postID, limit, offset)
 	} else {
-		rows, err = pr.db.Query("SELECT * FROM posts.comments WHERE deleted_at IS NULL AND post_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", postID, limit, offset)
+		rows, err = pr.db.Query("SELECT * FROM forum.comments WHERE deleted_at IS NULL AND post_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", postID, limit, offset)
 	}
 	if err != nil {
 		return nil, err
@@ -163,7 +161,7 @@ func (pr postgresRepository) GetComments(p context.Context, postID string, inclu
 	for rows.Next() {
 		comment := repository.Comment{}
 		err = rows.Scan(
-			&comment.ID, &comment.PostID, &comment.Text, &comment.HashIP, &comment.CreatedAt, &comment.DeletedAt)
+			&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &comment.DeletedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -176,7 +174,7 @@ func (pr postgresRepository) CreateBoard(p context.Context, name string, descrip
 	var (
 		boardId int
 	)
-	err := pr.db.QueryRow("INSERT INTO posts.boards (name, description) VALUES($1, $2) RETURNING id", name, description).Scan(&boardId)
+	err := pr.db.QueryRow("INSERT INTO forum.boards (name, description) VALUES($1, $2) RETURNING id", name, description).Scan(&boardId)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +182,7 @@ func (pr postgresRepository) CreateBoard(p context.Context, name string, descrip
 }
 
 func (pr postgresRepository) DeleteBoard(p context.Context, id string) (bool, error) {
-	stmt, err := pr.db.Prepare("UPDATE posts.boards SET deleted_at = NOW() WHERE id = $1")
+	stmt, err := pr.db.Prepare("UPDATE forum.boards SET deleted_at = NOW() WHERE id = $1")
 	if err != nil {
 		return false, err
 	}
@@ -198,7 +196,7 @@ func (pr postgresRepository) DeleteBoard(p context.Context, id string) (bool, er
 }
 
 func (pr postgresRepository) RestoreBoard(p context.Context, id string) (bool, error) {
-	stmt, err := pr.db.Prepare("UPDATE posts.boards SET deleted_at = NULL WHERE id = $1")
+	stmt, err := pr.db.Prepare("UPDATE forum.boards SET deleted_at = NULL WHERE id = $1")
 	if err != nil {
 		return false, err
 	}
@@ -215,8 +213,8 @@ func (pr postgresRepository) CreatePost(p context.Context, boardId string, title
 	var (
 		postId int
 	)
-	hashIp = hashingIP(hashIp)
-	err := pr.db.QueryRow("INSERT INTO posts.posts (board_id, title, text, hash_ip) VALUES($1, $2, $3, $4) RETURNING id", boardId, title, text, hashIp).Scan(&postId)
+	hashIp = ""
+	err := pr.db.QueryRow("INSERT INTO forum.posts (board_id, title, text, hash_ip) VALUES($1, $2, $3, $4) RETURNING id", boardId, title, text, hashIp).Scan(&postId)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +222,7 @@ func (pr postgresRepository) CreatePost(p context.Context, boardId string, title
 }
 
 func (pr postgresRepository) DeletePost(p context.Context, id string) (bool, error) {
-	stmt, err := pr.db.Prepare("UPDATE posts.posts SET deleted_at = NOW() WHERE id = $1")
+	stmt, err := pr.db.Prepare("UPDATE forum.posts SET deleted_at = NOW() WHERE id = $1")
 	if err != nil {
 		return false, err
 	}
@@ -241,8 +239,8 @@ func (pr postgresRepository) CreateComment(p context.Context, postID string, tex
 	var (
 		commentId int
 	)
-	hashIp = hashingIP(hashIp)
-	err := pr.db.QueryRow("INSERT INTO posts.comments (post_id, text, hash_ip) VALUES($1, $2, $3) RETURNING id", postID, text, hashIp).Scan(&commentId)
+	hashIp = ""
+	err := pr.db.QueryRow("INSERT INTO forum.comments (post_id, text, hash_ip) VALUES($1, $2, $3) RETURNING id", postID, text, hashIp).Scan(&commentId)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +248,7 @@ func (pr postgresRepository) CreateComment(p context.Context, postID string, tex
 }
 
 func (pr postgresRepository) DeleteComment(p context.Context, id string) (bool, error) {
-	stmt, err := pr.db.Prepare("UPDATE posts.comments SET deleted_at = NOW() WHERE id = $1")
+	stmt, err := pr.db.Prepare("UPDATE forum.comments SET deleted_at = NOW() WHERE id = $1")
 	if err != nil {
 		return false, err
 	}
@@ -261,11 +259,4 @@ func (pr postgresRepository) DeleteComment(p context.Context, id string) (bool, 
 		return false, err
 	}
 	return true, nil
-}
-
-func hashingIP(hashIp string) string {
-	hasher := sha1.New()
-	hasher.Write([]byte(hashIp))
-	hashIp = base64.URLEncoding.EncodeToString(hasher.Sum(nil))
-	return hashIp
 }

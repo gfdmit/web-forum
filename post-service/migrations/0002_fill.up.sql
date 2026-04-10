@@ -1,19 +1,24 @@
--- Добавляем тестовые доски
-INSERT INTO posts.boards (name, description)
+INSERT INTO forum.users (login, password_hash)
+VALUES
+    ('admin', 'admin');
+
+INSERT INTO forum.profiles (user_id, university_id, firstname, lastname, middlename, birthday, faculty, grade, "group", status)
+VALUES
+    (1, '1', 'admin', 'admin', 'admin', '1.1.2001', 'admin', 'admin', 'admin', 'admin');
+
+INSERT INTO forum.boards (name, description)
 VALUES 
     ('b', 'Бред'),
     ('news', 'Ньюсач')
 ON CONFLICT (name) DO NOTHING;
 
--- Добавляем тестовые посты
-INSERT INTO posts.posts (board_id, title, text, hash_ip)
+INSERT INTO forum.posts (user_id, board_id, title, text)
 VALUES
-    (1, 'First post!', 'Hello everyone!', '127.0.0.1'),
-    (2, 'New feature', 'Check out the update!', '192.168.1.1'),
-    (2, 'Third post!', 'Wazzap!', '192.168.0.0');
+    (1, 1, 'First post!', 'Hello everyone!'),
+    (1, 2, 'New feature', 'Check out the update!'),
+    (1, 2, 'Third post!', 'Wazzap!');
 
--- Добавляем комментарии
-INSERT INTO posts.comments (post_id, text, hash_ip)
+INSERT INTO forum.comments (user_id, post_id, text)
 VALUES
-    (1, 'Welcome!', 'user123'),
-    (1, 'Great start!', 'anon456');
+    (1, 1, 'Welcome!'),
+    (1, 1, 'Great start!');
