@@ -2,261 +2,380 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
+	"strings"
 
 	"github.com/gfdmit/web-forum/post-service/config"
+	"github.com/gfdmit/web-forum/post-service/internal/model"
 	"github.com/gfdmit/web-forum/post-service/internal/repository"
 	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
-
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type postgresRepository struct {
-	db *sql.DB
+	db *pgxpool.Pool
 }
 
-func New(conf config.Postgres) (*postgresRepository, error) {
+func New(ctx context.Context, conf *config.Postgres) (repository.Repository, error) {
 	url := fmt.Sprintf(
-		"postgresql://%v:%v@%v:%v/%v?sslmode=disable", conf.User, conf.Pass, conf.Host, conf.Port, conf.DB)
-	db, err := sql.Open("postgres", url)
+		"postgresql://%v:%v@%v:%v/%v?sslmode=disable",
+		conf.User, conf.Pass, conf.Host, conf.Port, conf.DB,
+	)
+
+	migrateURL := strings.Replace(url, "postgresql://", "pgx5://", 1)
+	m, err := migrate.New(fmt.Sprintf("file://%v", conf.Migrations), migrateURL)
 	if err != nil {
-		return nil, fmt.Errorf("sql.Open: %v", err)
+		return nil, fmt.Errorf("migrate.New: %w", err)
 	}
-	err = db.Ping()
-	if err != nil {
-		return nil, fmt.Errorf("db.Ping: %v", err)
-	}
-	driver, err := postgres.WithInstance(db, &postgres.Config{})
-	if err != nil {
-		return nil, fmt.Errorf("postgers.WithInstance: %v", err)
-	}
-	migrations := fmt.Sprintf("file://%v", conf.Migrations)
-	m, err := migrate.NewWithDatabaseInstance(migrations, conf.DB, driver)
-	if err != nil {
-		return nil, fmt.Errorf("migrate.NewWithDatabaseInstance: %v", err)
-	}
+	defer m.Close()
+
 	log.Println("applying migrations...")
 	if err := m.Up(); err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
 			log.Println("nothing to migrate")
 		} else {
-			return nil, fmt.Errorf("error when migrating: %v", err)
+			return nil, fmt.Errorf("m.Up: %w", err)
 		}
 	} else {
 		log.Println("migrated successfully!")
 	}
 
+	poolConf, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, fmt.Errorf("pgxpool.ParseConfig: %w", err)
+	}
+
+	poolConf.MaxConns = conf.Pool.MaxConns
+	poolConf.MinConns = conf.Pool.MinConns
+	poolConf.MaxConnLifetime = conf.Pool.MaxConnLifetime
+	poolConf.MaxConnIdleTime = conf.Pool.MaxConnIdleTime
+	poolConf.HealthCheckPeriod = conf.Pool.HealthCheckPeriod
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolConf)
+	if err != nil {
+		return nil, fmt.Errorf("pgxpool.NewWithConfig: %w", err)
+	}
+
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("pool.Ping: %w", err)
+	}
+
 	return &postgresRepository{
-		db: db,
+		db: pool,
 	}, nil
 }
 
-func (pr postgresRepository) GetBoard(p context.Context, id string) (interface{}, error) {
-	board := &repository.Board{}
-	err := pr.db.QueryRow("SELECT * FROM forum.boards WHERE id = $1", id).Scan(
-		&board.ID, &board.Name, &board.Description, &board.CreatedAt, &board.DeletedAt)
+func (pr *postgresRepository) GetBoard(ctx context.Context, id int) (model.Board, error) {
+	const query = `
+        SELECT id, name, description, created_at, deleted_at
+        FROM forum.boards
+        WHERE id = $1
+    `
+	var board model.Board
+	err := pr.db.QueryRow(ctx, query, id).Scan(
+		&board.ID, &board.Name, &board.Description, &board.CreatedAt, &board.DeletedAt,
+	)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.Board{}, fmt.Errorf("board not found: %w", repository.ErrNotFound)
+		}
+		return model.Board{}, fmt.Errorf("GetBoard: %w", err)
 	}
 	return board, nil
 }
 
-func (pr postgresRepository) GetBoards(p context.Context, includeDeleted bool) (interface{}, error) {
-	boards := []repository.Board{}
-	var (
-		rows *sql.Rows
-		err  error
-	)
+func (pr *postgresRepository) GetBoards(ctx context.Context, includeDeleted bool) ([]model.Board, error) {
+	const queryAll = `
+		SELECT id, name, description, created_at, deleted_at
+		FROM forum.boards
+	`
+	const queryActive = `
+		SELECT id, name, description, created_at, deleted_at
+		FROM forum.boards
+		WHERE deleted_at IS NULL
+	`
+	query := queryActive
 	if includeDeleted {
-		rows, err = pr.db.Query("SELECT * FROM forum.boards")
-	} else {
-		rows, err = pr.db.Query("SELECT * FROM forum.boards WHERE deleted_at IS NULL")
+		query = queryAll
 	}
+	rows, err := pr.db.Query(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GetBoards: %w", err)
 	}
 	defer rows.Close()
 
+	boards := make([]model.Board, 0)
 	for rows.Next() {
-		board := repository.Board{}
+		var board model.Board
 		err = rows.Scan(&board.ID, &board.Name, &board.Description, &board.CreatedAt, &board.DeletedAt)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("GetBoards scan: %w", err)
 		}
 		boards = append(boards, board)
 	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetBoards rows: %w", err)
+	}
+
 	return boards, nil
 }
 
-func (pr postgresRepository) GetPost(p context.Context, id string) (interface{}, error) {
-	post := &repository.Post{}
-	err := pr.db.QueryRow("SELECT * FROM forum.posts WHERE id = $1", id).Scan(
-		&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &post.DeletedAt)
+func (pr *postgresRepository) GetPost(ctx context.Context, id int) (model.Post, error) {
+	const query = `
+        SELECT id, user_id, board_id, title, text, created_at, deleted_at
+        FROM forum.posts
+        WHERE id = $1
+    `
+	var post model.Post
+	err := pr.db.QueryRow(ctx, query, id).Scan(
+		&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &post.DeletedAt,
+	)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.Post{}, fmt.Errorf("post not found: %w", repository.ErrNotFound)
+		}
+		return model.Post{}, fmt.Errorf("GetPost: %w", err)
 	}
 	return post, nil
 }
 
-func (pr postgresRepository) GetPosts(p context.Context, boardID string, includeDeleted bool, limit int, offset int) (interface{}, error) {
-	posts := []repository.Post{}
-	var (
-		rows *sql.Rows
-		err  error
-	)
+func (pr *postgresRepository) GetPosts(ctx context.Context, boardID int, includeDeleted bool, limit, offset int) ([]model.Post, error) {
+	const queryAll = `
+		SELECT id, user_id, board_id, title, text, created_at, deleted_at
+		FROM forum.posts
+		WHERE board_id = $1
+		ORDER BY updated_at DESC
+		LIMIT $2 OFFSET $3
+	`
+	const queryActive = `
+		SELECT id, user_id, board_id, title, text, created_at, deleted_at
+		FROM forum.posts
+		WHERE board_id = $1
+		AND deleted_at IS NULL
+		ORDER BY updated_at DESC
+		LIMIT $2 OFFSET $3
+	`
+
+	query := queryActive
 	if includeDeleted {
-		rows, err = pr.db.Query("SELECT * FROM forum.posts WHERE board_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", boardID, limit, offset)
-	} else {
-		rows, err = pr.db.Query("SELECT * FROM forum.posts WHERE deleted_at IS NULL AND board_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", boardID, limit, offset)
+		query = queryAll
 	}
+	rows, err := pr.db.Query(ctx, query, boardID, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GetPosts: %w", err)
 	}
 	defer rows.Close()
 
+	posts := make([]model.Post, 0)
 	for rows.Next() {
-		post := repository.Post{}
+		var post model.Post
 		err = rows.Scan(
-			&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &post.DeletedAt)
+			&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &post.DeletedAt,
+		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("GetPosts scan: %w", err)
 		}
 		posts = append(posts, post)
 	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetPosts rows: %w", err)
+	}
+
 	return posts, nil
 }
 
-func (pr postgresRepository) GetComment(p context.Context, id string) (interface{}, error) {
-	comment := &repository.Comment{}
-	err := pr.db.QueryRow("SELECT * FROM forum.comments WHERE id = $1", id).Scan(
-		&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &comment.DeletedAt)
+func (pr *postgresRepository) GetComment(ctx context.Context, id int) (model.Comment, error) {
+	const query = `
+        SELECT id, user_id, post_id, text, created_at, deleted_at
+        FROM forum.comments
+        WHERE id = $1
+    `
+	var comment model.Comment
+	err := pr.db.QueryRow(ctx, query, id).Scan(
+		&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &comment.DeletedAt,
+	)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.Comment{}, fmt.Errorf("comment not found: %w", repository.ErrNotFound)
+		}
+		return model.Comment{}, fmt.Errorf("GetComment: %w", err)
 	}
 	return comment, nil
 }
 
-func (pr postgresRepository) GetComments(p context.Context, postID string, includeDeleted bool, limit int, offset int) (interface{}, error) {
-	comments := []repository.Comment{}
-	var (
-		rows *sql.Rows
-		err  error
-	)
+func (pr *postgresRepository) GetComments(ctx context.Context, postID int, includeDeleted bool, limit, offset int) ([]model.Comment, error) {
+	const queryAll = `
+		SELECT id, user_id, post_id, text, created_at, deleted_at
+		FROM forum.comments
+		WHERE post_id = $1
+		ORDER BY created_at
+		LIMIT $2 OFFSET $3
+	`
+	const queryActive = `
+		SELECT id, user_id, post_id, text, created_at, deleted_at
+		FROM forum.comments
+		WHERE post_id = $1
+		AND deleted_at IS NULL
+		ORDER BY created_at
+		LIMIT $2 OFFSET $3
+	`
+
+	query := queryActive
 	if includeDeleted {
-		rows, err = pr.db.Query("SELECT * FROM forum.comments WHERE post_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", postID, limit, offset)
-	} else {
-		rows, err = pr.db.Query("SELECT * FROM forum.comments WHERE deleted_at IS NULL AND post_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3", postID, limit, offset)
+		query = queryAll
 	}
+
+	rows, err := pr.db.Query(ctx, query, postID, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("GetComments: %w", err)
 	}
 	defer rows.Close()
 
+	comments := make([]model.Comment, 0)
 	for rows.Next() {
-		comment := repository.Comment{}
+		var comment model.Comment
 		err = rows.Scan(
-			&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &comment.DeletedAt)
+			&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &comment.DeletedAt,
+		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("GetComments scan: %w", err)
 		}
 		comments = append(comments, comment)
 	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetComments rows: %w", err)
+	}
+
 	return comments, nil
 }
 
-func (pr postgresRepository) CreateBoard(p context.Context, name string, description string) (interface{}, error) {
-	var (
-		boardId int
+func (pr *postgresRepository) CreateBoard(ctx context.Context, input model.CreateBoardInput) (model.Board, error) {
+	const query = `
+        INSERT INTO forum.boards (name, description)
+        VALUES ($1, $2)
+        RETURNING id, name, description, created_at, deleted_at
+    `
+	var board model.Board
+	err := pr.db.QueryRow(ctx, query, input.Name, input.Description).Scan(
+		&board.ID, &board.Name, &board.Description, &board.CreatedAt, &board.DeletedAt,
 	)
-	err := pr.db.QueryRow("INSERT INTO forum.boards (name, description) VALUES($1, $2) RETURNING id", name, description).Scan(&boardId)
 	if err != nil {
-		return nil, err
+		return model.Board{}, fmt.Errorf("CreateBoard: %w", err)
 	}
-	return pr.GetBoard(p, strconv.Itoa(boardId))
+	return board, nil
 }
 
-func (pr postgresRepository) DeleteBoard(p context.Context, id string) (bool, error) {
-	stmt, err := pr.db.Prepare("UPDATE forum.boards SET deleted_at = NOW() WHERE id = $1")
+func (pr *postgresRepository) DeleteBoard(ctx context.Context, id int) error {
+	const query = `
+		UPDATE forum.boards
+		SET deleted_at = NOW()
+		WHERE id = $1
+		AND deleted_at IS NULL
+	`
+	result, err := pr.db.Exec(ctx, query, id)
 	if err != nil {
-		return false, err
+		return fmt.Errorf("DeleteBoard: %w", err)
 	}
-	defer stmt.Close()
 
-	_, err = stmt.Exec(id)
-	if err != nil {
-		return false, err
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("DeleteBoard: %w", repository.ErrNotFound)
 	}
-	return true, nil
+
+	return nil
 }
 
-func (pr postgresRepository) RestoreBoard(p context.Context, id string) (bool, error) {
-	stmt, err := pr.db.Prepare("UPDATE forum.boards SET deleted_at = NULL WHERE id = $1")
+func (pr *postgresRepository) RestoreBoard(ctx context.Context, id int) error {
+	const query = `
+		UPDATE forum.boards
+		SET deleted_at = NULL
+		WHERE id = $1
+		AND deleted_at IS NOT NULL
+	`
+	result, err := pr.db.Exec(ctx, query, id)
 	if err != nil {
-		return false, err
+		return fmt.Errorf("RestoreBoard: %w", err)
 	}
-	defer stmt.Close()
 
-	_, err = stmt.Exec(id)
-	if err != nil {
-		return false, err
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("RestoreBoard: %w", repository.ErrNotFound)
 	}
-	return true, nil
+
+	return nil
 }
 
-func (pr postgresRepository) CreatePost(p context.Context, boardId string, title string, text string, hashIp string) (interface{}, error) {
-	var (
-		postId int
+func (pr *postgresRepository) CreatePost(ctx context.Context, input model.CreatePostInput) (model.Post, error) {
+	const query = `
+		INSERT INTO forum.posts (user_id, board_id, title, text)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, user_id, board_id, title, text, created_at, deleted_at
+	`
+	var post model.Post
+	err := pr.db.QueryRow(ctx, query, input.UserID, input.BoardID, input.Title, input.Text).Scan(
+		&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &post.DeletedAt,
 	)
-	hashIp = ""
-	err := pr.db.QueryRow("INSERT INTO forum.posts (board_id, title, text, hash_ip) VALUES($1, $2, $3, $4) RETURNING id", boardId, title, text, hashIp).Scan(&postId)
 	if err != nil {
-		return nil, err
+		return model.Post{}, fmt.Errorf("CreatePost: %w", err)
 	}
-	return pr.GetPost(p, strconv.Itoa(postId))
+	return post, nil
 }
 
-func (pr postgresRepository) DeletePost(p context.Context, id string) (bool, error) {
-	stmt, err := pr.db.Prepare("UPDATE forum.posts SET deleted_at = NOW() WHERE id = $1")
+func (pr *postgresRepository) DeletePost(ctx context.Context, id int) error {
+	const query = `
+		UPDATE forum.posts
+		SET deleted_at = NOW()
+		WHERE id = $1
+		AND deleted_at IS NULL
+	`
+	result, err := pr.db.Exec(ctx, query, id)
 	if err != nil {
-		return false, err
+		return fmt.Errorf("DeletePost: %w", err)
 	}
-	defer stmt.Close()
 
-	_, err = stmt.Exec(id)
-	if err != nil {
-		return false, err
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("DeletePost: %w", repository.ErrNotFound)
 	}
-	return true, nil
+
+	return nil
 }
 
-func (pr postgresRepository) CreateComment(p context.Context, postID string, text string, hashIp string) (interface{}, error) {
-	var (
-		commentId int
+func (pr *postgresRepository) CreateComment(ctx context.Context, input model.CreateCommentInput) (model.Comment, error) {
+	const query = `
+		INSERT INTO forum.comments (user_id, post_id, text)
+		VALUES ($1, $2, $3)
+		RETURNING id, user_id, post_id, text, created_at, deleted_at
+	`
+	var comment model.Comment
+	err := pr.db.QueryRow(ctx, query, input.UserID, input.PostID, input.Text).Scan(
+		&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &comment.DeletedAt,
 	)
-	hashIp = ""
-	err := pr.db.QueryRow("INSERT INTO forum.comments (post_id, text, hash_ip) VALUES($1, $2, $3) RETURNING id", postID, text, hashIp).Scan(&commentId)
 	if err != nil {
-		return nil, err
+		return model.Comment{}, fmt.Errorf("CreateComment: %w", err)
 	}
-	return pr.GetComment(p, strconv.Itoa(commentId))
+	return comment, nil
 }
 
-func (pr postgresRepository) DeleteComment(p context.Context, id string) (bool, error) {
-	stmt, err := pr.db.Prepare("UPDATE forum.comments SET deleted_at = NOW() WHERE id = $1")
+func (pr *postgresRepository) DeleteComment(ctx context.Context, id int) error {
+	const query = `
+		UPDATE forum.comments
+		SET deleted_at = NOW()
+		WHERE id = $1
+		AND deleted_at IS NULL
+	`
+	result, err := pr.db.Exec(ctx, query, id)
 	if err != nil {
-		return false, err
+		return fmt.Errorf("DeleteComment: %w", err)
 	}
-	defer stmt.Close()
 
-	_, err = stmt.Exec(id)
-	if err != nil {
-		return false, err
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("DeleteComment: %w", repository.ErrNotFound)
 	}
-	return true, nil
+
+	return nil
 }

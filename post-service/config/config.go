@@ -21,6 +21,15 @@ type Postgres struct {
 	DB         string        `env:"POSTGRES_DB" env-default:"posts"`
 	Timeout    time.Duration `env:"POSTGRES_TIMEOUT" env-default:"5s"`
 	Migrations string        `env:"POSTGRES_MIGRATIONS" env-default:"./migrations"`
+	Pool
+}
+
+type Pool struct {
+	MaxConns          int32         `env:"POOL_MAXCONNS" env-default:"10"`
+	MinConns          int32         `env:"POOL_MINCONNS" env-default:"2"`
+	MaxConnLifetime   time.Duration `env:"POOL_MAXCONNLIFETIME" env-default:"1h"`
+	MaxConnIdleTime   time.Duration `env:"POOL_MAXCONNIDLETIME" env-default:"15m"`
+	HealthCheckPeriod time.Duration `env:"POOL_HEALTHCHECKPERIOD" env-default:"1m"`
 }
 
 type HTTPServer struct {

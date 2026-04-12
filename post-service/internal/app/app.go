@@ -5,28 +5,23 @@ import (
 	"fmt"
 
 	"github.com/gfdmit/web-forum/post-service/config"
-	v2 "github.com/gfdmit/web-forum/post-service/internal/handlers/http/v2"
+	"github.com/gfdmit/web-forum/post-service/internal/handler/rest"
 	"github.com/gfdmit/web-forum/post-service/internal/httpserver"
 	"github.com/gfdmit/web-forum/post-service/internal/repository/postgres"
 	"github.com/gfdmit/web-forum/post-service/internal/service"
 )
 
-func Run(conf config.Config) error {
+func Run(conf *config.Config) error {
 	ctx := context.Background()
 
-	repo, err := postgres.New(conf.Postgres)
+	repo, err := postgres.New(ctx, &conf.Postgres)
 	if err != nil {
-		return fmt.Errorf("error when setting up repository: %v", err)
+		return fmt.Errorf("postgres.New: %w", err)
 	}
 
-	service := service.New(repo)
+	svc := service.New(repo)
+	router := rest.NewRouter(svc)
+	server := httpserver.New(conf.HTTPServer, router)
 
-	handler, err := v2.New(service)
-	if err != nil {
-		return fmt.Errorf("error when setting up handler: %v", err)
-	}
-
-	httpserver := httpserver.New(conf.HTTPServer, handler)
-
-	return httpserver.Run(ctx)
+	return server.Run(ctx)
 }

@@ -1,19 +1,30 @@
 package repository
 
-import "context"
+import (
+	"context"
+	"errors"
+
+	"github.com/gfdmit/web-forum/post-service/internal/model"
+)
+
+var (
+	ErrNotFound = errors.New("not found")
+)
 
 type Repository interface {
-	GetBoard(p context.Context, id string) (interface{}, error)
-	GetBoards(p context.Context, includeDeleted bool) (interface{}, error)
-	GetPost(p context.Context, id string) (interface{}, error)
-	GetPosts(p context.Context, boardID string, includeDeleted bool, limit int, offset int) (interface{}, error)
-	GetComment(p context.Context, id string) (interface{}, error)
-	GetComments(p context.Context, postID string, includeDeleted bool, limit int, offset int) (interface{}, error)
-	CreateBoard(p context.Context, name string, description string) (interface{}, error)
-	DeleteBoard(p context.Context, id string) (bool, error)
-	RestoreBoard(p context.Context, id string) (bool, error)
-	CreatePost(p context.Context, boardId string, title string, text string, hashIp string) (interface{}, error)
-	DeletePost(p context.Context, id string) (bool, error)
-	CreateComment(p context.Context, postID string, text string, hashIp string) (interface{}, error)
-	DeleteComment(p context.Context, id string) (bool, error)
+	GetBoard(ctx context.Context, id int) (model.Board, error)
+	GetBoards(ctx context.Context, includeDeleted bool) ([]model.Board, error)
+	CreateBoard(ctx context.Context, input model.CreateBoardInput) (model.Board, error)
+	DeleteBoard(ctx context.Context, id int) error
+	RestoreBoard(ctx context.Context, id int) error
+
+	GetPost(ctx context.Context, id int) (model.Post, error)
+	GetPosts(ctx context.Context, boardID int, includeDeleted bool, limit, offset int) ([]model.Post, error)
+	CreatePost(ctx context.Context, input model.CreatePostInput) (model.Post, error)
+	DeletePost(ctx context.Context, id int) error
+
+	GetComment(ctx context.Context, id int) (model.Comment, error)
+	GetComments(ctx context.Context, postID int, includeDeleted bool, limit, offset int) ([]model.Comment, error)
+	CreateComment(ctx context.Context, input model.CreateCommentInput) (model.Comment, error)
+	DeleteComment(ctx context.Context, id int) error
 }

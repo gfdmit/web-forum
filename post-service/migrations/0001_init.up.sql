@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS forum.posts (
     title           TEXT NOT NULL,
     text            TEXT NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at      TIMESTAMPTZ
 );
 
