@@ -9,23 +9,19 @@ import (
 )
 
 type Proxy struct {
-	target *url.URL
+	rp *httputil.ReverseProxy
 }
 
 func New(targetURL string) (*Proxy, error) {
 	u, err := url.Parse(targetURL)
 	if err != nil {
-		return nil, fmt.Errorf("error when setup proxy url: %v", err)
+		return nil, fmt.Errorf("proxy.New: %w", err)
 	}
-	return &Proxy{target: u}, nil
+	return &Proxy{rp: httputil.NewSingleHostReverseProxy(u)}, nil
 }
 
 func (p *Proxy) Forward() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		rp := httputil.NewSingleHostReverseProxy(p.target)
-
-		c.Request.Host = p.target.Host
-
-		rp.ServeHTTP(c.Writer, c.Request)
+		p.rp.ServeHTTP(c.Writer, c.Request)
 	}
 }

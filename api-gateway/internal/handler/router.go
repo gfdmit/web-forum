@@ -1,4 +1,4 @@
-package v1
+package handler
 
 import (
 	"fmt"
@@ -13,36 +13,38 @@ import (
 
 func New(conf *config.Config) (*gin.Engine, error) {
 	router := gin.New()
+	router.Use(gin.Logger(), gin.Recovery())
 
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Authorization", "Content-Type"},
-		ExposeHeaders:    []string{"Content-Length"},
+		AllowMethods:     []string{"GET", "POST", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Content-Type"},
 		AllowCredentials: false,
 		MaxAge:           2 * time.Hour,
 	}))
 
+	router.GET("/ping", pingHandler(map[string]string{
+		"auth":  fmt.Sprintf("http://%s:%s/ping", conf.AuthService.Host, conf.AuthService.Port),
+		"posts": fmt.Sprintf("http://%s:%s/ping", conf.PostService.Host, conf.PostService.Port),
+	}))
+
 	postProxy, err := proxy.New(fmt.Sprintf("http://%s:%s", conf.PostService.Host, conf.PostService.Port))
 	if err != nil {
-		return nil, fmt.Errorf("error when setup router: %v", err)
+		return nil, fmt.Errorf("proxy.New post: %w", err)
 	}
 
 	authProxy, err := proxy.New(fmt.Sprintf("http://%s:%s", conf.AuthService.Host, conf.AuthService.Port))
 	if err != nil {
-		return nil, fmt.Errorf("error when setup router: %v", err)
+		return nil, fmt.Errorf("proxy.New auth: %w", err)
 	}
 
 	api := router.Group("/api/v1")
-	api.Use(gin.Logger())
 
 	public := api.Group("")
 	{
 		public.POST("/auth/login", authProxy.Forward())
 
 		public.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
-
-		public.GET("/ping", postProxy.Forward())
 
 		public.GET("/boards", postProxy.Forward())
 		public.GET("/boards/:id", postProxy.Forward())
@@ -55,10 +57,9 @@ func New(conf *config.Config) (*gin.Engine, error) {
 	}
 
 	protected := api.Group("")
+	protected.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
+	protected.Use(middleware.Auth(conf.JWT.Secret))
 	{
-		protected.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
-		protected.Use(middleware.Auth(conf.JWT.Secret))
-
 		protected.POST("/boards", postProxy.Forward())
 		protected.DELETE("/boards/:id", postProxy.Forward())
 		protected.POST("/boards/:id/restore", postProxy.Forward())

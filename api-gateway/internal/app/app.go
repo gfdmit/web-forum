@@ -5,18 +5,18 @@ import (
 	"fmt"
 
 	"github.com/gfdmit/web-forum/api-gateway/config"
-	v1 "github.com/gfdmit/web-forum/api-gateway/internal/handlers/http/v1"
+	"github.com/gfdmit/web-forum/api-gateway/internal/handler"
 	"github.com/gfdmit/web-forum/api-gateway/internal/httpserver"
 )
 
 func Run(conf *config.Config) error {
 	ctx := context.Background()
-	handler, err := v1.New(conf)
+	router, err := handler.New(conf)
 	if err != nil {
-		return fmt.Errorf("error when setting up handler: %v", err)
+		return fmt.Errorf("handler.New: %w", err)
 	}
 
-	httpserver := httpserver.New(conf.HTTPServer, handler)
+	server := httpserver.New(conf.HTTPServer, router)
 
-	return httpserver.Run(ctx)
+	return server.Run(ctx)
 }

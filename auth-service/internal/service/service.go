@@ -1,58 +1,42 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/gfdmit/web-forum/auth-service/config"
-	"github.com/gfdmit/web-forum/auth-service/internal/repository/postgres"
-	"github.com/gfdmit/web-forum/auth-service/internal/utils"
+	"github.com/gfdmit/web-forum/auth-service/internal/kfu"
+	"github.com/gfdmit/web-forum/auth-service/internal/model"
+	"github.com/gfdmit/web-forum/auth-service/internal/repository"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
-type Service struct {
+var (
+	ErrInvalidCredentials = errors.New("invalid credentials")
+)
+
+type Service interface {
+	GenerateToken(ctx context.Context, login, password string) (string, error)
+}
+
+type service struct {
 	conf *config.JWT
-	repo *postgres.Repository
+	repo repository.Repository
+	kfu  kfu.KFUClient
 }
 
-func New(conf *config.JWT, repo *postgres.Repository) *Service {
-	return &Service{
-		conf: conf,
-		repo: repo,
-	}
+func New(conf *config.JWT, repo repository.Repository, kfu kfu.KFUClient) Service {
+	return &service{conf: conf, repo: repo, kfu: kfu}
 }
 
-func (svc *Service) GenerateToken(login, password string) (string, error) {
-	id, passHash, err := svc.repo.GetIdPassHash(login)
-	if err != nil && !errors.Is(err, postgres.ErrNotFound) {
-		fmt.Printf("db dead: %v\n", err)
+func (svc *service) GenerateToken(ctx context.Context, login, password string) (string, error) {
+	id, err := svc.resolveUser(ctx, login, password)
+	if err != nil {
 		return "", err
-	}
-
-	isParser := errors.Is(err, postgres.ErrNotFound) || (bcrypt.CompareHashAndPassword([]byte(passHash), []byte(password)) != nil)
-	if isParser {
-		profile, err := utils.ParseKFU(login, password)
-		if err != nil {
-			fmt.Printf("parser dead: %v\n", err)
-			return "", err
-		}
-		newPassHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		if err != nil {
-			fmt.Printf("hasher dead: %v\n", err)
-			return "", err
-		}
-		id, err = svc.repo.CreateOrUpdateUser(login, string(newPassHash))
-		if err != nil {
-			fmt.Printf("users dead: %v\n", err)
-			return "", err
-		}
-		if err := svc.repo.CreateOrUpdateProfile(id, profile); err != nil {
-			fmt.Printf("profile dead: %v\n", err)
-			return "", err
-		}
 	}
 
 	claims := jwt.MapClaims{
@@ -62,5 +46,69 @@ func (svc *Service) GenerateToken(login, password string) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(svc.conf.Secret))
+	signed, err := token.SignedString([]byte(svc.conf.Secret))
+	if err != nil {
+		return "", fmt.Errorf("GenerateToken sign: %w", err)
+	}
+	return signed, nil
+}
+
+func (svc *service) resolveUser(ctx context.Context, login, password string) (int, error) {
+	user, err := svc.repo.GetUserByLogin(ctx, login)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return 0, fmt.Errorf("resolveUser get: %w", err)
+	}
+
+	needsUpdate := errors.Is(err, repository.ErrNotFound) ||
+		bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil
+
+	if !needsUpdate {
+		return user.ID, nil
+	}
+
+	return svc.syncFromKFU(ctx, login, password)
+}
+
+func (svc *service) syncFromKFU(ctx context.Context, login, password string) (int, error) {
+	profile, err := svc.kfu.ParseKFU(ctx, login, password)
+	if err != nil {
+		if errors.Is(err, kfu.ErrInvalidCredentials) {
+			return 0, ErrInvalidCredentials
+		}
+		return 0, fmt.Errorf("syncFromKFU parse: %w", err)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return 0, fmt.Errorf("syncFromKFU hash: %w", err)
+	}
+
+	user, err := svc.repo.CreateOrUpdateUser(ctx, model.CreateUserInput{
+		Login:        login,
+		PasswordHash: string(hash),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("syncFromKFU user: %w", err)
+	}
+
+	if err := svc.repo.CreateOrUpdateProfile(ctx, toProfileInput(user.ID, profile)); err != nil {
+		return 0, fmt.Errorf("syncFromKFU profile: %w", err)
+	}
+
+	return user.ID, nil
+}
+
+func toProfileInput(userID int, p *model.Profile) model.CreateProfileInput {
+	return model.CreateProfileInput{
+		UserID:       userID,
+		UniversityID: p.AllId,
+		Firstname:    p.Firstname,
+		Lastname:     p.Lastname,
+		Middlename:   p.MiddleName,
+		Birthday:     p.Birthday,
+		Faculty:      p.Faculty,
+		Grade:        p.Grade,
+		Group:        p.Group,
+		Status:       p.Status,
+	}
 }

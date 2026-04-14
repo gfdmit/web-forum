@@ -5,8 +5,9 @@ import (
 	"fmt"
 
 	"github.com/gfdmit/web-forum/auth-service/config"
-	v1 "github.com/gfdmit/web-forum/auth-service/internal/handlers/http/v1"
+	"github.com/gfdmit/web-forum/auth-service/internal/handler/rest"
 	"github.com/gfdmit/web-forum/auth-service/internal/httpserver"
+	"github.com/gfdmit/web-forum/auth-service/internal/kfu"
 	"github.com/gfdmit/web-forum/auth-service/internal/repository/postgres"
 	"github.com/gfdmit/web-forum/auth-service/internal/service"
 )
@@ -14,19 +15,18 @@ import (
 func Run(conf *config.Config) error {
 	ctx := context.Background()
 
-	repo, err := postgres.New(conf.Postgres)
+	repo, err := postgres.New(ctx, conf.Postgres)
 	if err != nil {
-		return fmt.Errorf("error when setting up repository: %v", err)
+		return fmt.Errorf("error when setting up repository: %w", err)
 	}
 
-	service := service.New(&conf.JWT, repo)
+	client := kfu.NewClient()
 
-	handler, err := v1.New(&conf.JWT, service)
-	if err != nil {
-		return fmt.Errorf("error when setting up handler: %v", err)
-	}
+	svc := service.New(&conf.JWT, repo, client)
 
-	httpserver := httpserver.New(conf.HTTPServer, handler)
+	handler := rest.NewRouter(svc, conf.JWT.TTL)
 
-	return httpserver.Run(ctx)
+	server := httpserver.New(conf.HTTPServer, handler)
+
+	return server.Run(ctx)
 }
