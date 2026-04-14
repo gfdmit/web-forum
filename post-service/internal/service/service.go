@@ -80,7 +80,7 @@ func (svc *service) GetPosts(ctx context.Context, boardID int, includeDeleted bo
 }
 
 func (svc *service) CreatePost(ctx context.Context, input model.CreatePostInput) (model.Post, error) {
-	if input.Title != nil && len(*input.Title) > 100 {
+	if len(input.Title) > 100 {
 		return model.Post{}, ErrValidation
 	}
 	if len(input.Text) > 5000 {

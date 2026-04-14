@@ -17,7 +17,7 @@ type Postgres struct {
 	User       string        `env:"POSTGRES_USER" env-default:"postgres"`
 	Pass       string        `env:"POSTGRES_PASSWORD" env-default:"postgres"`
 	Host       string        `env:"POSTGRES_HOST" env-default:"localhost"`
-	Port       string        `env:"POSTGRES_PORT" env-default:"8000"`
+	Port       string        `env:"POSTGRES_PORT" env-default:"5432"`
 	DB         string        `env:"POSTGRES_DB" env-default:"posts"`
 	Timeout    time.Duration `env:"POSTGRES_TIMEOUT" env-default:"5s"`
 	Migrations string        `env:"POSTGRES_MIGRATIONS" env-default:"./migrations"`

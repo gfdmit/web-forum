@@ -76,6 +76,7 @@ func (pr *postgresRepository) GetBoard(ctx context.Context, id int) (model.Board
         SELECT id, name, description, created_at, deleted_at
         FROM forum.boards
         WHERE id = $1
+		AND deleted_at IS NULL
     `
 	var board model.Board
 	err := pr.db.QueryRow(ctx, query, id).Scan(
@@ -131,6 +132,7 @@ func (pr *postgresRepository) GetPost(ctx context.Context, id int) (model.Post, 
         SELECT id, user_id, board_id, title, text, created_at, deleted_at
         FROM forum.posts
         WHERE id = $1
+		AND deleted_at IS NULL
     `
 	var post model.Post
 	err := pr.db.QueryRow(ctx, query, id).Scan(
@@ -195,6 +197,7 @@ func (pr *postgresRepository) GetComment(ctx context.Context, id int) (model.Com
         SELECT id, user_id, post_id, text, created_at, deleted_at
         FROM forum.comments
         WHERE id = $1
+		AND deleted_at IS NULL
     `
 	var comment model.Comment
 	err := pr.db.QueryRow(ctx, query, id).Scan(
@@ -385,6 +388,7 @@ func (pr *postgresRepository) GetProfile(ctx context.Context, userID int) (model
         SELECT id, user_id, university_id, firstname, lastname, middlename, birthday, faculty, grade, "group", status
         FROM forum.profiles
         WHERE user_id = $1
+		AND deleted_at IS NULL
     `
 	var profile model.Profile
 	err := pr.db.QueryRow(ctx, query, userID).Scan(
