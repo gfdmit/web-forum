@@ -379,3 +379,61 @@ func (pr *postgresRepository) DeleteComment(ctx context.Context, id int) error {
 
 	return nil
 }
+
+func (pr *postgresRepository) GetProfile(ctx context.Context, userID int) (model.Profile, error) {
+	const query = `
+        SELECT id, user_id, university_id, firstname, lastname, middlename, birthday, faculty, grade, "group", status
+        FROM forum.profiles
+        WHERE user_id = $1
+    `
+	var profile model.Profile
+	err := pr.db.QueryRow(ctx, query, userID).Scan(
+		&profile.ID, &profile.UserID, &profile.UniversityID, &profile.Firstname, &profile.Lastname, &profile.Middlename, &profile.Birthday, &profile.Faculty, &profile.Grade, &profile.Group, &profile.Status,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.Profile{}, fmt.Errorf("profile not found: %w", repository.ErrNotFound)
+		}
+		return model.Profile{}, fmt.Errorf("GetProfile: %w", err)
+	}
+	return profile, nil
+}
+
+func (pr *postgresRepository) GetProfiles(ctx context.Context, includeDeleted bool) ([]model.Profile, error) {
+	const queryAll = `
+        SELECT id, user_id, university_id, firstname, lastname, middlename, birthday, faculty, grade, "group", status
+        FROM forum.profiles
+    `
+	const queryActive = `
+        SELECT id, user_id, university_id, firstname, lastname, middlename, birthday, faculty, grade, "group", status
+        FROM forum.profiles
+        WHERE deleted_at IS NULL
+    `
+
+	query := queryActive
+	if includeDeleted {
+		query = queryAll
+	}
+	rows, err := pr.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("GetProfiles: %w", err)
+	}
+	defer rows.Close()
+
+	profiles := make([]model.Profile, 0)
+	for rows.Next() {
+		var profile model.Profile
+		err = rows.Scan(
+			&profile.ID, &profile.UserID, &profile.UniversityID, &profile.Firstname, &profile.Lastname, &profile.Middlename, &profile.Birthday, &profile.Faculty, &profile.Grade, &profile.Group, &profile.Status,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("GetProfiles scan: %w", err)
+		}
+		profiles = append(profiles, profile)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetProfiles rows: %w", err)
+	}
+
+	return profiles, nil
+}

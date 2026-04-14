@@ -54,6 +54,9 @@ func New(conf *config.Config) (*gin.Engine, error) {
 
 		public.GET("/posts/:id/comments", postProxy.Forward())
 		public.GET("/comments/:id", postProxy.Forward())
+
+		public.GET("profiles", postProxy.Forward())
+		public.GET("profiles/:id", postProxy.Forward())
 	}
 
 	protected := api.Group("")

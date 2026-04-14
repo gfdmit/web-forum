@@ -224,3 +224,29 @@ func (h *Handler) DeleteComment(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+func (h *Handler) GetProfiles(c *gin.Context) {
+	includeDeleted := c.Query("includeDeleted") == "true"
+
+	profiles, err := h.svc.GetProfiles(c.Request.Context(), includeDeleted)
+	if err != nil {
+		handleError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, profiles)
+}
+
+func (h *Handler) GetProfile(c *gin.Context) {
+	id, err := parseID(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	profile, err := h.svc.GetProfile(c.Request.Context(), id)
+	if err != nil {
+		handleError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, profile)
+}

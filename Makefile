@@ -1,7 +1,7 @@
 up:
 	docker compose up -d
 
-up_build:
+build:
 	docker compose up -d --build
 
 restart:

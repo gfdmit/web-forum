@@ -27,4 +27,7 @@ type Repository interface {
 	GetComments(ctx context.Context, postID int, includeDeleted bool, limit, offset int) ([]model.Comment, error)
 	CreateComment(ctx context.Context, input model.CreateCommentInput) (model.Comment, error)
 	DeleteComment(ctx context.Context, id int) error
+
+	GetProfile(ctx context.Context, userID int) (model.Profile, error)
+	GetProfiles(ctx context.Context, includeDeleted bool) ([]model.Profile, error)
 }

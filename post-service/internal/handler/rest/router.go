@@ -34,6 +34,9 @@ func NewRouter(svc service.Service) *gin.Engine {
 		api.GET("/comments/:id", h.GetComment)
 		api.POST("/comments", h.CreateComment)
 		api.DELETE("/comments/:id", h.DeleteComment)
+
+		api.GET("/profiles", h.GetProfiles)
+		api.GET("/profiles/:id", h.GetProfile)
 	}
 
 	return router
