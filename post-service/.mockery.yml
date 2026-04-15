@@ -1,0 +1,9 @@
+template: testify
+packages:
+  github.com/gfdmit/web-forum/post-service/internal/repository:
+    interfaces:
+      Repository:
+        config:
+          dir: internal/mocks
+          pkgname: mocks
+          filename: mock_repository.go
