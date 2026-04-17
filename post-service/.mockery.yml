@@ -7,3 +7,11 @@ packages:
           dir: internal/mocks
           pkgname: mocks
           filename: mock_repository.go
+
+  github.com/gfdmit/web-forum/post-service/internal/service:
+    interfaces:
+      Service:
+        config:
+          dir: internal/mocks
+          pkgname: mocks
+          filename: mock_service.go

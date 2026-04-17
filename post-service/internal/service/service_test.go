@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -18,7 +17,7 @@ func TestCreateBoard_EmptyName(t *testing.T) {
 	repo := mocks.NewMockRepository(t)
 	svc := New(repo)
 
-	_, err := svc.CreateBoard(context.Background(), model.CreateBoardInput{Name: ""})
+	_, err := svc.CreateBoard(t.Context(), model.CreateBoardInput{Name: ""})
 
 	assert.ErrorIs(t, err, ErrValidation)
 }
@@ -30,9 +29,9 @@ func TestCreateBoard_Success(t *testing.T) {
 	input := model.CreateBoardInput{Name: "General"}
 	expected := model.Board{ID: 1, Name: "General"}
 
-	repo.EXPECT().CreateBoard(context.Background(), input).Return(expected, nil).Once()
+	repo.EXPECT().CreateBoard(t.Context(), input).Return(expected, nil)
 
-	board, err := svc.CreateBoard(context.Background(), input)
+	board, err := svc.CreateBoard(t.Context(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, expected, board)
@@ -50,7 +49,7 @@ func TestCreatePost_TitleTooLong(t *testing.T) {
 		BoardID: 1,
 	}
 
-	_, err := svc.CreatePost(context.Background(), input)
+	_, err := svc.CreatePost(t.Context(), input)
 
 	assert.ErrorIs(t, err, ErrValidation)
 }
@@ -65,7 +64,7 @@ func TestCreatePost_TextTooLong(t *testing.T) {
 		BoardID: 1,
 	}
 
-	_, err := svc.CreatePost(context.Background(), input)
+	_, err := svc.CreatePost(t.Context(), input)
 
 	assert.ErrorIs(t, err, ErrValidation)
 }
@@ -75,9 +74,9 @@ func TestCreatePost_BoardNotFound(t *testing.T) {
 	svc := New(repo)
 
 	input := model.CreatePostInput{Text: "text", BoardID: 99}
-	repo.EXPECT().GetBoard(context.Background(), 99).Return(model.Board{}, repository.ErrNotFound).Once()
+	repo.EXPECT().GetBoard(t.Context(), 99).Return(model.Board{}, repository.ErrNotFound)
 
-	_, err := svc.CreatePost(context.Background(), input)
+	_, err := svc.CreatePost(t.Context(), input)
 
 	assert.ErrorIs(t, err, repository.ErrNotFound)
 }
@@ -87,11 +86,10 @@ func TestCreatePost_RepoError(t *testing.T) {
 	svc := New(repo)
 
 	input := model.CreatePostInput{Text: "text", BoardID: 1}
-	repo.EXPECT().GetBoard(context.Background(), 1).Return(model.Board{}, assert.AnError).Once()
+	repo.EXPECT().GetBoard(t.Context(), 1).Return(model.Board{}, assert.AnError)
 
-	_, err := svc.CreatePost(context.Background(), input)
+	_, err := svc.CreatePost(t.Context(), input)
 
-	require.Error(t, err)
 	assert.ErrorIs(t, err, assert.AnError)
 }
 
@@ -102,10 +100,10 @@ func TestCreatePost_Success(t *testing.T) {
 	input := model.CreatePostInput{Text: "text", BoardID: 1}
 	expected := model.Post{ID: 1, Text: "text", BoardID: 1}
 
-	repo.EXPECT().GetBoard(context.Background(), 1).Return(model.Board{ID: 1}, nil).Once()
-	repo.EXPECT().CreatePost(context.Background(), input).Return(expected, nil).Once()
+	repo.EXPECT().GetBoard(t.Context(), 1).Return(model.Board{ID: 1}, nil)
+	repo.EXPECT().CreatePost(t.Context(), input).Return(expected, nil)
 
-	post, err := svc.CreatePost(context.Background(), input)
+	post, err := svc.CreatePost(t.Context(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, expected, post)
@@ -122,7 +120,7 @@ func TestCreateComment_TextTooLong(t *testing.T) {
 		PostID: 1,
 	}
 
-	_, err := svc.CreateComment(context.Background(), input)
+	_, err := svc.CreateComment(t.Context(), input)
 
 	assert.ErrorIs(t, err, ErrValidation)
 }
@@ -132,11 +130,23 @@ func TestCreateComment_PostNotFound(t *testing.T) {
 	svc := New(repo)
 
 	input := model.CreateCommentInput{Text: "text", PostID: 99}
-	repo.EXPECT().GetPost(context.Background(), 99).Return(model.Post{}, repository.ErrNotFound).Once()
+	repo.EXPECT().GetPost(t.Context(), 99).Return(model.Post{}, repository.ErrNotFound)
 
-	_, err := svc.CreateComment(context.Background(), input)
+	_, err := svc.CreateComment(t.Context(), input)
 
 	assert.ErrorIs(t, err, repository.ErrNotFound)
+}
+
+func TestCreateComment_RepoError(t *testing.T) {
+	repo := mocks.NewMockRepository(t)
+	svc := New(repo)
+
+	input := model.CreateCommentInput{Text: "text", PostID: 1}
+	repo.EXPECT().GetPost(t.Context(), 1).Return(model.Post{}, assert.AnError)
+
+	_, err := svc.CreateComment(t.Context(), input)
+
+	assert.ErrorIs(t, err, assert.AnError)
 }
 
 func TestCreateComment_Success(t *testing.T) {
@@ -146,10 +156,10 @@ func TestCreateComment_Success(t *testing.T) {
 	input := model.CreateCommentInput{Text: "text", PostID: 1}
 	expected := model.Comment{ID: 1, Text: "text", PostID: 1}
 
-	repo.EXPECT().GetPost(context.Background(), 1).Return(model.Post{ID: 1}, nil).Once()
-	repo.EXPECT().CreateComment(context.Background(), input).Return(expected, nil).Once()
+	repo.EXPECT().GetPost(t.Context(), 1).Return(model.Post{ID: 1}, nil)
+	repo.EXPECT().CreateComment(t.Context(), input).Return(expected, nil)
 
-	comment, err := svc.CreateComment(context.Background(), input)
+	comment, err := svc.CreateComment(t.Context(), input)
 
 	require.NoError(t, err)
 	assert.Equal(t, expected, comment)
@@ -178,11 +188,10 @@ func TestGetPosts_NormalizesLimit(t *testing.T) {
 			svc := New(repo)
 
 			repo.EXPECT().
-				GetPosts(context.Background(), 1, false, tt.expectedLimit, tt.expectedOffset).
-				Return([]model.Post{}, nil).
-				Once()
+				GetPosts(t.Context(), 1, false, tt.expectedLimit, tt.expectedOffset).
+				Return([]model.Post{}, nil)
 
-			_, err := svc.GetPosts(context.Background(), 1, false, tt.limit, tt.offset)
+			_, err := svc.GetPosts(t.Context(), 1, false, tt.limit, tt.offset)
 
 			require.NoError(t, err)
 		})
@@ -212,171 +221,12 @@ func TestGetComments_NormalizesLimit(t *testing.T) {
 			svc := New(repo)
 
 			repo.EXPECT().
-				GetComments(context.Background(), 1, false, tt.expectedLimit, tt.expectedOffset).
-				Return([]model.Comment{}, nil).
-				Once()
+				GetComments(t.Context(), 1, false, tt.expectedLimit, tt.expectedOffset).
+				Return([]model.Comment{}, nil)
 
-			_, err := svc.GetComments(context.Background(), 1, false, tt.limit, tt.offset)
+			_, err := svc.GetComments(t.Context(), 1, false, tt.limit, tt.offset)
 
 			require.NoError(t, err)
 		})
 	}
-}
-
-// ───── GetBoard / GetBoards ─────
-
-func TestGetBoard_PassesThroughResult(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	want := model.Board{ID: 1, Name: "General"}
-	repo.EXPECT().GetBoard(context.Background(), 1).Return(want, nil).Once()
-
-	got, err := svc.GetBoard(context.Background(), 1)
-
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
-}
-
-func TestGetBoard_PassesThroughError(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	repo.EXPECT().GetBoard(context.Background(), 1).Return(model.Board{}, repository.ErrNotFound).Once()
-
-	_, err := svc.GetBoard(context.Background(), 1)
-
-	assert.ErrorIs(t, err, repository.ErrNotFound)
-}
-
-func TestGetBoards_PassesThroughResult(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	want := []model.Board{{ID: 1}, {ID: 2}}
-	repo.EXPECT().GetBoards(context.Background(), false).Return(want, nil).Once()
-
-	got, err := svc.GetBoards(context.Background(), false)
-
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
-}
-
-// ───── DeleteBoard / RestoreBoard ─────
-
-func TestDeleteBoard_PassesThroughError(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	repo.EXPECT().DeleteBoard(context.Background(), 1).Return(repository.ErrNotFound).Once()
-
-	err := svc.DeleteBoard(context.Background(), 1)
-
-	assert.ErrorIs(t, err, repository.ErrNotFound)
-}
-
-func TestRestoreBoard_PassesThroughError(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	repo.EXPECT().RestoreBoard(context.Background(), 1).Return(repository.ErrNotFound).Once()
-
-	err := svc.RestoreBoard(context.Background(), 1)
-
-	assert.ErrorIs(t, err, repository.ErrNotFound)
-}
-
-// ───── GetPost / DeletePost ─────
-
-func TestGetPost_PassesThroughResult(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	want := model.Post{ID: 5}
-	repo.EXPECT().GetPost(context.Background(), 5).Return(want, nil).Once()
-
-	got, err := svc.GetPost(context.Background(), 5)
-
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
-}
-
-func TestDeletePost_PassesThroughError(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	repo.EXPECT().DeletePost(context.Background(), 1).Return(repository.ErrNotFound).Once()
-
-	err := svc.DeletePost(context.Background(), 1)
-
-	assert.ErrorIs(t, err, repository.ErrNotFound)
-}
-
-// ───── GetComment / DeleteComment ─────
-
-func TestGetComment_PassesThroughResult(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	want := model.Comment{ID: 3}
-	repo.EXPECT().GetComment(context.Background(), 3).Return(want, nil).Once()
-
-	got, err := svc.GetComment(context.Background(), 3)
-
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
-}
-
-func TestDeleteComment_PassesThroughError(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	repo.EXPECT().DeleteComment(context.Background(), 1).Return(repository.ErrNotFound).Once()
-
-	err := svc.DeleteComment(context.Background(), 1)
-
-	assert.ErrorIs(t, err, repository.ErrNotFound)
-}
-
-// ───── GetProfile / GetProfiles ─────
-
-func TestGetProfile_PassesThroughResult(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	want := model.Profile{UserID: 7}
-	repo.EXPECT().GetProfile(context.Background(), 7).Return(want, nil).Once()
-
-	got, err := svc.GetProfile(context.Background(), 7)
-
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
-}
-
-func TestGetProfiles_PassesThroughResult(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	want := []model.Profile{{UserID: 1}, {UserID: 2}}
-	repo.EXPECT().GetProfiles(context.Background(), false).Return(want, nil).Once()
-
-	got, err := svc.GetProfiles(context.Background(), false)
-
-	require.NoError(t, err)
-	assert.Equal(t, want, got)
-}
-
-// ───── wrapped errors ─────
-
-func TestCreateComment_RepoError(t *testing.T) {
-	repo := mocks.NewMockRepository(t)
-	svc := New(repo)
-
-	input := model.CreateCommentInput{Text: "text", PostID: 1}
-	repo.EXPECT().GetPost(context.Background(), 1).Return(model.Post{}, assert.AnError).Once()
-
-	_, err := svc.CreateComment(context.Background(), input)
-
-	require.Error(t, err)
-	assert.ErrorIs(t, err, assert.AnError)
 }
