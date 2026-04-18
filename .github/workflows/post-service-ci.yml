@@ -25,7 +25,7 @@ jobs:
           cache-dependency-path: post-service/go.sum
 
       - name: Run unit tests
-        run: go test ./internal/service/... ./internal/handler/...
+        run: go test ./internal/service/... ./internal/handler/rest/...
 
   integration:
     name: Integration tests

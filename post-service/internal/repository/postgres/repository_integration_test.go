@@ -190,7 +190,7 @@ func TestRepo_Post(t *testing.T) {
 		assert.Greater(t, post.ID, 0)
 		assert.Equal(t, "Hello World", post.Title)
 		assert.Nil(t, post.UserID)
-		assert.Nil(t, post.Author) // нет user_id → Author nil
+		assert.Nil(t, post.Author)
 	})
 
 	t.Run("GetPost_Active", func(t *testing.T) {
