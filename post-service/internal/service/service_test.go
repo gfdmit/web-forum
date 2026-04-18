@@ -165,7 +165,29 @@ func TestCreateComment_Success(t *testing.T) {
 	assert.Equal(t, expected, comment)
 }
 
-// ───── GetPosts — нормализация лимитов ─────
+// ───── GetPosts — проверка существования борда ─────
+
+func TestGetPosts_BoardNotFound(t *testing.T) {
+	repo := mocks.NewMockRepository(t)
+	svc := New(repo)
+
+	repo.EXPECT().GetBoard(t.Context(), 99).Return(model.Board{}, repository.ErrNotFound)
+
+	_, err := svc.GetPosts(t.Context(), 99, false, 20, 0)
+
+	assert.ErrorIs(t, err, repository.ErrNotFound)
+}
+
+func TestGetPosts_BoardRepoError(t *testing.T) {
+	repo := mocks.NewMockRepository(t)
+	svc := New(repo)
+
+	repo.EXPECT().GetBoard(t.Context(), 1).Return(model.Board{}, assert.AnError)
+
+	_, err := svc.GetPosts(t.Context(), 1, false, 20, 0)
+
+	assert.ErrorIs(t, err, assert.AnError)
+}
 
 func TestGetPosts_NormalizesLimit(t *testing.T) {
 	tests := []struct {
@@ -187,6 +209,7 @@ func TestGetPosts_NormalizesLimit(t *testing.T) {
 			repo := mocks.NewMockRepository(t)
 			svc := New(repo)
 
+			repo.EXPECT().GetBoard(t.Context(), 1).Return(model.Board{ID: 1}, nil)
 			repo.EXPECT().
 				GetPosts(t.Context(), 1, false, tt.expectedLimit, tt.expectedOffset).
 				Return([]model.Post{}, nil)
@@ -198,7 +221,29 @@ func TestGetPosts_NormalizesLimit(t *testing.T) {
 	}
 }
 
-// ───── GetComments — нормализация лимитов ─────
+// ───── GetComments — проверка существования поста ─────
+
+func TestGetComments_PostNotFound(t *testing.T) {
+	repo := mocks.NewMockRepository(t)
+	svc := New(repo)
+
+	repo.EXPECT().GetPost(t.Context(), 99).Return(model.Post{}, repository.ErrNotFound)
+
+	_, err := svc.GetComments(t.Context(), 99, false, 20, 0)
+
+	assert.ErrorIs(t, err, repository.ErrNotFound)
+}
+
+func TestGetComments_PostRepoError(t *testing.T) {
+	repo := mocks.NewMockRepository(t)
+	svc := New(repo)
+
+	repo.EXPECT().GetPost(t.Context(), 1).Return(model.Post{}, assert.AnError)
+
+	_, err := svc.GetComments(t.Context(), 1, false, 20, 0)
+
+	assert.ErrorIs(t, err, assert.AnError)
+}
 
 func TestGetComments_NormalizesLimit(t *testing.T) {
 	tests := []struct {
@@ -220,6 +265,7 @@ func TestGetComments_NormalizesLimit(t *testing.T) {
 			repo := mocks.NewMockRepository(t)
 			svc := New(repo)
 
+			repo.EXPECT().GetPost(t.Context(), 1).Return(model.Post{ID: 1}, nil)
 			repo.EXPECT().
 				GetComments(t.Context(), 1, false, tt.expectedLimit, tt.expectedOffset).
 				Return([]model.Comment{}, nil)

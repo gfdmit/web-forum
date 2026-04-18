@@ -70,6 +70,13 @@ func (svc *service) GetPost(ctx context.Context, id int) (model.Post, error) {
 }
 
 func (svc *service) GetPosts(ctx context.Context, boardID int, includeDeleted bool, limit, offset int) ([]model.Post, error) {
+	if _, err := svc.repo.GetBoard(ctx, boardID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return []model.Post{}, repository.ErrNotFound
+		}
+		return []model.Post{}, fmt.Errorf("GetPosts check board: %w", err)
+	}
+
 	if limit > 100 || limit <= 0 {
 		limit = 100
 	}
@@ -104,6 +111,12 @@ func (svc *service) GetComment(ctx context.Context, id int) (model.Comment, erro
 }
 
 func (svc *service) GetComments(ctx context.Context, postID int, includeDeleted bool, limit, offset int) ([]model.Comment, error) {
+	if _, err := svc.repo.GetPost(ctx, postID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return []model.Comment{}, repository.ErrNotFound
+		}
+		return []model.Comment{}, fmt.Errorf("GetComments check post: %w", err)
+	}
 	if limit > 100 || limit <= 0 {
 		limit = 100
 	}

@@ -129,14 +129,18 @@ func (pr *postgresRepository) GetBoards(ctx context.Context, includeDeleted bool
 
 func (pr *postgresRepository) GetPost(ctx context.Context, id int) (model.Post, error) {
 	const query = `
-        SELECT id, user_id, board_id, title, text, created_at, deleted_at
-        FROM forum.posts
-        WHERE id = $1
-		AND deleted_at IS NULL
+        SELECT 
+			p.id, p.user_id, p.board_id, p.title, p.text, p.created_at,
+			pr.firstname, pr.lastname
+		FROM forum.posts p
+		LEFT JOIN forum.profiles pr ON pr.user_id = p.user_id
+        WHERE p.id = $1
+		AND p.deleted_at IS NULL
     `
 	var post model.Post
+	var firstname, lastname *string
 	err := pr.db.QueryRow(ctx, query, id).Scan(
-		&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &post.DeletedAt,
+		&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &firstname, &lastname,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -144,23 +148,35 @@ func (pr *postgresRepository) GetPost(ctx context.Context, id int) (model.Post, 
 		}
 		return model.Post{}, fmt.Errorf("GetPost: %w", err)
 	}
+	if firstname != nil && lastname != nil {
+		post.Author = &model.Author{
+			Firstname: *firstname,
+			Lastname:  *lastname,
+		}
+	}
 	return post, nil
 }
 
 func (pr *postgresRepository) GetPosts(ctx context.Context, boardID int, includeDeleted bool, limit, offset int) ([]model.Post, error) {
 	const queryAll = `
-		SELECT id, user_id, board_id, title, text, created_at, deleted_at
-		FROM forum.posts
-		WHERE board_id = $1
-		ORDER BY updated_at DESC
+		SELECT 
+			p.id, p.user_id, p.board_id, p.title, p.text, p.created_at,
+			pr.firstname, pr.lastname
+		FROM forum.posts p
+		LEFT JOIN forum.profiles pr ON pr.user_id = p.user_id
+		WHERE p.board_id = $1
+		ORDER BY p.updated_at DESC
 		LIMIT $2 OFFSET $3
 	`
 	const queryActive = `
-		SELECT id, user_id, board_id, title, text, created_at, deleted_at
-		FROM forum.posts
-		WHERE board_id = $1
-		AND deleted_at IS NULL
-		ORDER BY updated_at DESC
+		SELECT 
+			p.id, p.user_id, p.board_id, p.title, p.text, p.created_at,
+			pr.firstname, pr.lastname
+		FROM forum.posts p
+		LEFT JOIN forum.profiles pr ON pr.user_id = p.user_id
+		WHERE p.board_id = $1
+		AND p.deleted_at IS NULL
+		ORDER BY p.updated_at DESC
 		LIMIT $2 OFFSET $3
 	`
 
@@ -177,14 +193,26 @@ func (pr *postgresRepository) GetPosts(ctx context.Context, boardID int, include
 	posts := make([]model.Post, 0)
 	for rows.Next() {
 		var post model.Post
+		var firstname, lastname *string
+
 		err = rows.Scan(
-			&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &post.DeletedAt,
+			&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt,
+			&firstname, &lastname,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("GetPosts scan: %w", err)
 		}
+
+		if firstname != nil && lastname != nil {
+			post.Author = &model.Author{
+				Firstname: *firstname,
+				Lastname:  *lastname,
+			}
+		}
+
 		posts = append(posts, post)
 	}
+
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("GetPosts rows: %w", err)
 	}
@@ -194,14 +222,18 @@ func (pr *postgresRepository) GetPosts(ctx context.Context, boardID int, include
 
 func (pr *postgresRepository) GetComment(ctx context.Context, id int) (model.Comment, error) {
 	const query = `
-        SELECT id, user_id, post_id, text, created_at, deleted_at
-        FROM forum.comments
-        WHERE id = $1
-		AND deleted_at IS NULL
+        SELECT 
+			c.id, c.user_id, c.post_id, c.text, c.created_at, 
+			pr.firstname, pr.lastname
+        FROM forum.comments c
+		LEFT JOIN forum.profiles pr ON pr.user_id = c.user_id
+        WHERE c.id = $1
+		AND c.deleted_at IS NULL
     `
 	var comment model.Comment
+	var firstname, lastname *string
 	err := pr.db.QueryRow(ctx, query, id).Scan(
-		&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &comment.DeletedAt,
+		&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &firstname, &lastname,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -209,23 +241,35 @@ func (pr *postgresRepository) GetComment(ctx context.Context, id int) (model.Com
 		}
 		return model.Comment{}, fmt.Errorf("GetComment: %w", err)
 	}
+	if firstname != nil && lastname != nil {
+		comment.Author = &model.Author{
+			Firstname: *firstname,
+			Lastname:  *lastname,
+		}
+	}
 	return comment, nil
 }
 
 func (pr *postgresRepository) GetComments(ctx context.Context, postID int, includeDeleted bool, limit, offset int) ([]model.Comment, error) {
 	const queryAll = `
-		SELECT id, user_id, post_id, text, created_at, deleted_at
-		FROM forum.comments
-		WHERE post_id = $1
-		ORDER BY created_at
+		SELECT 
+			c.id, c.user_id, c.post_id, c.text, c.created_at, 
+			pr.firstname, pr.lastname
+        FROM forum.comments c
+		LEFT JOIN forum.profiles pr ON pr.user_id = c.user_id
+		WHERE c.post_id = $1
+		ORDER BY c.created_at
 		LIMIT $2 OFFSET $3
 	`
 	const queryActive = `
-		SELECT id, user_id, post_id, text, created_at, deleted_at
-		FROM forum.comments
-		WHERE post_id = $1
-		AND deleted_at IS NULL
-		ORDER BY created_at
+		SELECT 
+			c.id, c.user_id, c.post_id, c.text, c.created_at, 
+			pr.firstname, pr.lastname
+        FROM forum.comments c
+		LEFT JOIN forum.profiles pr ON pr.user_id = c.user_id
+		WHERE c.post_id = $1
+		AND c.deleted_at IS NULL
+		ORDER BY c.created_at
 		LIMIT $2 OFFSET $3
 	`
 
@@ -243,11 +287,18 @@ func (pr *postgresRepository) GetComments(ctx context.Context, postID int, inclu
 	comments := make([]model.Comment, 0)
 	for rows.Next() {
 		var comment model.Comment
+		var firstname, lastname *string
 		err = rows.Scan(
-			&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &comment.DeletedAt,
+			&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &firstname, &lastname,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("GetComments scan: %w", err)
+		}
+		if firstname != nil && lastname != nil {
+			comment.Author = &model.Author{
+				Firstname: *firstname,
+				Lastname:  *lastname,
+			}
 		}
 		comments = append(comments, comment)
 	}

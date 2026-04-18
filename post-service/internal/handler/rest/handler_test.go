@@ -20,6 +20,7 @@ import (
 func init() {
 	gin.SetMode(gin.TestMode)
 	gin.DefaultWriter = io.Discard
+	gin.DefaultErrorWriter = io.Discard
 }
 
 func jsonBody(t *testing.T, v any) *bytes.Buffer {
@@ -29,14 +30,84 @@ func jsonBody(t *testing.T, v any) *bytes.Buffer {
 	return bytes.NewBuffer(b)
 }
 
+// ───── parseID — покрываем один раз для всех эндпоинтов с :id ─────
+
+func TestParseID_Invalid(t *testing.T) {
+	endpoints := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/api/v2/boards/abc"},
+		{http.MethodDelete, "/api/v2/boards/abc"},
+		{http.MethodPost, "/api/v2/boards/abc/restore"},
+		{http.MethodGet, "/api/v2/posts/abc"},
+		{http.MethodDelete, "/api/v2/posts/abc"},
+		{http.MethodGet, "/api/v2/comments/abc"},
+		{http.MethodDelete, "/api/v2/comments/abc"},
+		{http.MethodGet, "/api/v2/profiles/abc"},
+	}
+
+	for _, e := range endpoints {
+		t.Run(e.method+" "+e.path, func(t *testing.T) {
+			svc := mocks.NewMockService(t)
+			router := NewRouter(svc)
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(e.method, e.path, nil)
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+		})
+	}
+}
+
+// ───── parseUserID — покрываем один раз через CreatePost ─────
+
+func TestParseUserID_Missing(t *testing.T) {
+	svc := mocks.NewMockService(t)
+	router := NewRouter(svc)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/posts", jsonBody(t, model.CreatePostInput{}))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestParseUserID_Invalid(t *testing.T) {
+	svc := mocks.NewMockService(t)
+	router := NewRouter(svc)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/posts", jsonBody(t, model.CreatePostInput{}))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-Id", "not-a-number")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestParseUserID_Zero(t *testing.T) {
+	svc := mocks.NewMockService(t)
+	router := NewRouter(svc)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/posts", jsonBody(t, model.CreatePostInput{}))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-Id", "0")
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
 // ───── GetBoards ─────
 
 func TestGetBoards_Success(t *testing.T) {
 	svc := mocks.NewMockService(t)
 	router := NewRouter(svc)
 
-	expected := []model.Board{{ID: 1, Name: "General"}}
-	svc.EXPECT().GetBoards(t.Context(), false).Return(expected, nil)
+	svc.EXPECT().GetBoards(t.Context(), false).Return([]model.Board{{ID: 1, Name: "General"}}, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v2/boards", nil)
@@ -62,17 +133,6 @@ func TestGetBoards_ServiceError(t *testing.T) {
 
 // ───── GetBoard ─────
 
-func TestGetBoard_InvalidID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/boards/abc", nil)
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
 func TestGetBoard_NotFound(t *testing.T) {
 	svc := mocks.NewMockService(t)
 	router := NewRouter(svc)
@@ -91,8 +151,7 @@ func TestGetBoard_Success(t *testing.T) {
 	svc := mocks.NewMockService(t)
 	router := NewRouter(svc)
 
-	expected := model.Board{ID: 1, Name: "General"}
-	svc.EXPECT().GetBoard(t.Context(), 1).Return(expected, nil)
+	svc.EXPECT().GetBoard(t.Context(), 1).Return(model.Board{ID: 1, Name: "General"}, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v2/boards/1", nil)
@@ -137,8 +196,7 @@ func TestCreateBoard_Success(t *testing.T) {
 	router := NewRouter(svc)
 
 	input := model.CreateBoardInput{Name: "General"}
-	expected := model.Board{ID: 1, Name: "General"}
-	svc.EXPECT().CreateBoard(t.Context(), input).Return(expected, nil)
+	svc.EXPECT().CreateBoard(t.Context(), input).Return(model.Board{ID: 1, Name: "General"}, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v2/boards", jsonBody(t, input))
@@ -150,17 +208,6 @@ func TestCreateBoard_Success(t *testing.T) {
 }
 
 // ───── DeleteBoard ─────
-
-func TestDeleteBoard_InvalidID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodDelete, "/api/v2/boards/abc", nil)
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
 
 func TestDeleteBoard_NotFound(t *testing.T) {
 	svc := mocks.NewMockService(t)
@@ -192,17 +239,6 @@ func TestDeleteBoard_Success(t *testing.T) {
 
 // ───── RestoreBoard ─────
 
-func TestRestoreBoard_InvalidID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v2/boards/abc/restore", nil)
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
 func TestRestoreBoard_NotFound(t *testing.T) {
 	svc := mocks.NewMockService(t)
 	router := NewRouter(svc)
@@ -231,18 +267,7 @@ func TestRestoreBoard_Success(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code)
 }
 
-// GetPost
-
-func TestGetPost_InvalidID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/posts/abc", nil)
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
+// ───── GetPost ─────
 
 func TestGetPost_NotFound(t *testing.T) {
 	svc := mocks.NewMockService(t)
@@ -262,8 +287,7 @@ func TestGetPost_Success(t *testing.T) {
 	svc := mocks.NewMockService(t)
 	router := NewRouter(svc)
 
-	expected := model.Post{ID: 1, UserID: nil, BoardID: 1, Title: "", Text: ""}
-	svc.EXPECT().GetPost(t.Context(), 1).Return(expected, nil)
+	svc.EXPECT().GetPost(t.Context(), 1).Return(model.Post{ID: 1, BoardID: 1}, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v2/posts/1", nil)
@@ -274,31 +298,6 @@ func TestGetPost_Success(t *testing.T) {
 }
 
 // ───── GetPosts ─────
-
-func TestGetPosts_InvalidBoardID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/boards/abc/posts", nil)
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestGetPosts_ServiceError(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	svc.EXPECT().GetPosts(t.Context(), 1, false, 20, 0).Return(nil, assert.AnError)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/boards/1/posts", nil)
-	req = req.WithContext(t.Context())
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-}
 
 func TestGetPosts_QueryParams(t *testing.T) {
 	tests := []struct {
@@ -332,32 +331,21 @@ func TestGetPosts_QueryParams(t *testing.T) {
 	}
 }
 
+func TestGetPosts_ServiceError(t *testing.T) {
+	svc := mocks.NewMockService(t)
+	router := NewRouter(svc)
+
+	svc.EXPECT().GetPosts(t.Context(), 1, false, 20, 0).Return(nil, assert.AnError)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/boards/1/posts", nil)
+	req = req.WithContext(t.Context())
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
 // ───── CreatePost ─────
-
-func TestCreatePost_MissingUserID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v2/posts", jsonBody(t, model.CreatePostInput{}))
-	req.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestCreatePost_InvalidUserID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v2/posts", jsonBody(t, model.CreatePostInput{}))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-Id", "not-a-number")
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
 
 func TestCreatePost_InvalidJSON(t *testing.T) {
 	svc := mocks.NewMockService(t)
@@ -396,8 +384,7 @@ func TestCreatePost_Success(t *testing.T) {
 
 	userID := 1
 	input := model.CreatePostInput{BoardID: 1, Text: "text", UserID: &userID}
-	expected := model.Post{ID: 1, BoardID: 1, Text: "text"}
-	svc.EXPECT().CreatePost(t.Context(), input).Return(expected, nil)
+	svc.EXPECT().CreatePost(t.Context(), input).Return(model.Post{ID: 1, BoardID: 1, Text: "text"}, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v2/posts", jsonBody(t, input))
@@ -410,17 +397,6 @@ func TestCreatePost_Success(t *testing.T) {
 }
 
 // ───── DeletePost ─────
-
-func TestDeletePost_InvalidID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodDelete, "/api/v2/posts/abc", nil)
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
 
 func TestDeletePost_NotFound(t *testing.T) {
 	svc := mocks.NewMockService(t)
@@ -450,18 +426,7 @@ func TestDeletePost_Success(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code)
 }
 
-// GetComment
-
-func TestGetComment_InvalidID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/comments/abc", nil)
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
+// ───── GetComment ─────
 
 func TestGetComment_NotFound(t *testing.T) {
 	svc := mocks.NewMockService(t)
@@ -481,8 +446,7 @@ func TestGetComment_Success(t *testing.T) {
 	svc := mocks.NewMockService(t)
 	router := NewRouter(svc)
 
-	expected := model.Comment{ID: 1, UserID: nil, PostID: 1, Text: ""}
-	svc.EXPECT().GetComment(t.Context(), 1).Return(expected, nil)
+	svc.EXPECT().GetComment(t.Context(), 1).Return(model.Comment{ID: 1, PostID: 1}, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v2/comments/1", nil)
@@ -492,18 +456,7 @@ func TestGetComment_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-// GetComments
-
-func TestGetComments_InvalidPostID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/posts/abc/comments", nil)
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
+// ───── GetComments ─────
 
 func TestGetComments_QueryParams(t *testing.T) {
 	tests := []struct {
@@ -553,13 +506,14 @@ func TestGetComments_ServiceError(t *testing.T) {
 
 // ───── CreateComment ─────
 
-func TestCreateComment_MissingUserID(t *testing.T) {
+func TestCreateComment_InvalidJSON(t *testing.T) {
 	svc := mocks.NewMockService(t)
 	router := NewRouter(svc)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v2/comments", jsonBody(t, model.CreateCommentInput{}))
+	req := httptest.NewRequest(http.MethodPost, "/api/v2/comments", bytes.NewBufferString("not-json"))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-Id", "1")
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -583,27 +537,13 @@ func TestCreateComment_PostNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-func TestCreateComment_InvalidJSON(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/v2/comments", bytes.NewBufferString("not-json"))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-Id", "1")
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
 func TestCreateComment_Success(t *testing.T) {
 	svc := mocks.NewMockService(t)
 	router := NewRouter(svc)
 
 	userID := 1
 	input := model.CreateCommentInput{PostID: 1, Text: "text", UserID: &userID}
-	expected := model.Comment{ID: 1, PostID: 1, Text: "text"}
-	svc.EXPECT().CreateComment(t.Context(), input).Return(expected, nil)
+	svc.EXPECT().CreateComment(t.Context(), input).Return(model.Comment{ID: 1, PostID: 1, Text: "text"}, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/v2/comments", jsonBody(t, input))
@@ -616,17 +556,6 @@ func TestCreateComment_Success(t *testing.T) {
 }
 
 // ───── DeleteComment ─────
-
-func TestDeleteComment_InvalidID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodDelete, "/api/v2/comments/abc", nil)
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
 
 func TestDeleteComment_NotFound(t *testing.T) {
 	svc := mocks.NewMockService(t)
@@ -688,17 +617,6 @@ func TestGetProfiles_ServiceError(t *testing.T) {
 
 // ───── GetProfile ─────
 
-func TestGetProfile_InvalidID(t *testing.T) {
-	svc := mocks.NewMockService(t)
-	router := NewRouter(svc)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/profiles/abc", nil)
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
 func TestGetProfile_NotFound(t *testing.T) {
 	svc := mocks.NewMockService(t)
 	router := NewRouter(svc)
@@ -717,8 +635,7 @@ func TestGetProfile_Success(t *testing.T) {
 	svc := mocks.NewMockService(t)
 	router := NewRouter(svc)
 
-	expected := model.Profile{ID: 1, UserID: 1}
-	svc.EXPECT().GetProfile(t.Context(), 1).Return(expected, nil)
+	svc.EXPECT().GetProfile(t.Context(), 1).Return(model.Profile{ID: 1, UserID: 1}, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v2/profiles/1", nil)
