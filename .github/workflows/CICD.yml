@@ -48,7 +48,7 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
-            cd ~/myproject
+            cd ~/web-forum
             git pull origin main
             docker compose up -d --build
             docker image prune -f
