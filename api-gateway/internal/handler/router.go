@@ -60,9 +60,12 @@ func New(conf *config.Config) (*gin.Engine, error) {
 	}
 
 	protected := api.Group("")
-	protected.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
 	protected.Use(middleware.Auth(conf.JWT.Secret))
 	{
+		public.POST("/auth/logout", authProxy.Forward())
+
+		protected.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
+
 		protected.POST("/boards", postProxy.Forward())
 		protected.DELETE("/boards/:id", postProxy.Forward())
 		protected.POST("/boards/:id/restore", postProxy.Forward())

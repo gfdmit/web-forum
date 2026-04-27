@@ -38,3 +38,8 @@ func (h *Handler) Login(c *gin.Context) {
 	c.SetCookie("token", token, int(h.ttl.Seconds()), "/", "", false, true)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
+
+func (h *Handler) Logout(c *gin.Context) {
+	c.SetCookie("token", "", -1, "/", "", false, true)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}

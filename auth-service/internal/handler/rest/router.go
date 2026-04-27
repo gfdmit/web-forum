@@ -21,6 +21,7 @@ func NewRouter(svc service.Service, ttl time.Duration) *gin.Engine {
 	api := router.Group("/api/v1")
 	{
 		api.POST("/auth/login", h.Login)
+		api.POST("/auth/logout", h.Logout)
 	}
 
 	return router
