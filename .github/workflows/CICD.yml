@@ -1,0 +1,54 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  post-service-unit:
+    name: Post Service Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: post-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: post-service/go.mod
+          cache-dependency-path: post-service/go.sum
+      - name: Run unit tests
+        run: go test ./internal/service/... ./internal/handler/rest/...
+
+  post-service-integration:
+    name: Post Service Integration Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: post-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: post-service/go.mod
+          cache-dependency-path: post-service/go.sum
+      - name: Run integration tests
+        run: go test -tags=integration -timeout=120s ./internal/repository/postgres/...
+
+  deploy:
+    name: Deploy to Yandex Cloud
+    runs-on: ubuntu-latest
+    needs:
+      - post-service-unit
+      - post-service-integration
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd ~/myproject
+            git pull origin main
+            docker compose up -d --build
+            docker image prune -f

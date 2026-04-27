@@ -250,3 +250,18 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, profile)
 }
+
+func (h *Handler) GetMyProfile(c *gin.Context) {
+	userID, err := parseUserID(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	profile, err := h.svc.GetProfile(c.Request.Context(), userID)
+	if err != nil {
+		handleError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, profile)
+}

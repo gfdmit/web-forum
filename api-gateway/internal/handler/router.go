@@ -72,6 +72,8 @@ func New(conf *config.Config) (*gin.Engine, error) {
 
 		protected.POST("/comments", postProxy.Forward())
 		protected.DELETE("/comments/:id", postProxy.Forward())
+
+		protected.GET("/profile", postProxy.Forward())
 	}
 
 	return router, nil
