@@ -9,13 +9,15 @@ type Post struct {
 	BoardID   int        `json:"board_id"`
 	Title     string     `json:"title"`
 	Text      string     `json:"text"`
+	MediaURL  *string    `json:"media_url,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 type CreatePostInput struct {
-	UserID  *int   `json:"-"`
-	BoardID int    `json:"board_id"`
-	Title   string `json:"title"`
-	Text    string `json:"text"`
+	UserID   *int    `json:"-"`
+	BoardID  int     `json:"board_id"`
+	Title    string  `json:"title"`
+	Text     string  `json:"text"`
+	MediaURL *string `json:"media_url,omitempty"`
 }

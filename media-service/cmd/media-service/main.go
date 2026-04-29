@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 
-	"github.com/gfdmit/web-forum/post-service/config"
-	"github.com/gfdmit/web-forum/post-service/internal/app"
+	"github.com/gfdmit/web-forum/media-service/config"
+	"github.com/gfdmit/web-forum/media-service/internal/app"
 )
 
 func main() {

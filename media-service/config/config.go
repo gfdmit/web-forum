@@ -14,11 +14,12 @@ type Config struct {
 }
 
 type MinIO struct {
-	User   string `env:"MINIO_USER" env-default:"minioadmin"`
-	Pass   string `env:"MINIO_PASSWORD" env-default:"minioadmin"`
-	Host   string `env:"MINIO_HOST" env-default:"localhost"`
-	Port   string `env:"MINIO_PORT" env-default:"8000"`
-	Bucket string `env:"MINIO_BUCKET" env-default:"bucket"`
+	User       string `env:"MINIO_USER" env-default:"minioadmin"`
+	Pass       string `env:"MINIO_PASSWORD" env-default:"minioadmin"`
+	Host       string `env:"MINIO_HOST" env-default:"localhost"`
+	Port       string `env:"MINIO_PORT" env-default:"9000"`
+	Bucket     string `env:"MINIO_BUCKET" env-default:"bucket"`
+	PublicHost string `env:"PUBLIC_HOST" env-default:"http://localhost:8080"`
 }
 
 type HTTPServer struct {

@@ -4,29 +4,23 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gfdmit/web-forum/post-service/config"
-	v1 "github.com/gfdmit/web-forum/post-service/internal/handlers/http/v1"
-	"github.com/gfdmit/web-forum/post-service/internal/httpserver"
-	"github.com/gfdmit/web-forum/post-service/internal/repository/minio"
-	"github.com/gfdmit/web-forum/post-service/internal/service"
+	"github.com/gfdmit/web-forum/media-service/config"
+	"github.com/gfdmit/web-forum/media-service/internal/handler/rest"
+	"github.com/gfdmit/web-forum/media-service/internal/httpserver"
+	"github.com/gfdmit/web-forum/media-service/internal/storage/minio"
 )
 
 func Run(conf config.Config) error {
 	ctx := context.Background()
-	repo, err := minio.New(conf.MinIO)
 
+	store, err := minio.New(conf.MinIO)
 	if err != nil {
 		return fmt.Errorf("error when setting up repository: %v", err)
 	}
 
-	service := service.New(repo)
+	handler := rest.NewRouter(store, conf.MinIO.PublicHost)
 
-	handler, err := v1.New(service)
-	if err != nil {
-		return fmt.Errorf("error when setting up handler: %v", err)
-	}
+	server := httpserver.New(conf.HTTPServer, handler)
 
-	httpserver := httpserver.New(conf.HTTPServer, handler)
-
-	return httpserver.Run(ctx)
+	return server.Run(ctx)
 }

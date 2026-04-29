@@ -130,7 +130,7 @@ func (pr *postgresRepository) GetBoards(ctx context.Context, includeDeleted bool
 func (pr *postgresRepository) GetPost(ctx context.Context, id int) (model.Post, error) {
 	const query = `
         SELECT 
-			p.id, p.user_id, p.board_id, p.title, p.text, p.created_at,
+			p.id, p.user_id, p.board_id, p.title, p.text, p.media_url, p.created_at,
 			pr.firstname, pr.lastname
 		FROM forum.posts p
 		LEFT JOIN forum.profiles pr ON pr.user_id = p.user_id
@@ -140,7 +140,7 @@ func (pr *postgresRepository) GetPost(ctx context.Context, id int) (model.Post, 
 	var post model.Post
 	var firstname, lastname *string
 	err := pr.db.QueryRow(ctx, query, id).Scan(
-		&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &firstname, &lastname,
+		&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.MediaURL, &post.CreatedAt, &firstname, &lastname,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -160,7 +160,7 @@ func (pr *postgresRepository) GetPost(ctx context.Context, id int) (model.Post, 
 func (pr *postgresRepository) GetPosts(ctx context.Context, boardID int, includeDeleted bool, limit, offset int) ([]model.Post, error) {
 	const queryAll = `
 		SELECT 
-			p.id, p.user_id, p.board_id, p.title, p.text, p.created_at,
+			p.id, p.user_id, p.board_id, p.title, p.text, p.media_url, p.created_at,
 			pr.firstname, pr.lastname
 		FROM forum.posts p
 		LEFT JOIN forum.profiles pr ON pr.user_id = p.user_id
@@ -170,7 +170,7 @@ func (pr *postgresRepository) GetPosts(ctx context.Context, boardID int, include
 	`
 	const queryActive = `
 		SELECT 
-			p.id, p.user_id, p.board_id, p.title, p.text, p.created_at,
+			p.id, p.user_id, p.board_id, p.title, p.text, p.media_url, p.created_at,
 			pr.firstname, pr.lastname
 		FROM forum.posts p
 		LEFT JOIN forum.profiles pr ON pr.user_id = p.user_id
@@ -196,7 +196,7 @@ func (pr *postgresRepository) GetPosts(ctx context.Context, boardID int, include
 		var firstname, lastname *string
 
 		err = rows.Scan(
-			&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt,
+			&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.MediaURL, &post.CreatedAt,
 			&firstname, &lastname,
 		)
 		if err != nil {
@@ -223,7 +223,7 @@ func (pr *postgresRepository) GetPosts(ctx context.Context, boardID int, include
 func (pr *postgresRepository) GetComment(ctx context.Context, id int) (model.Comment, error) {
 	const query = `
         SELECT 
-			c.id, c.user_id, c.post_id, c.text, c.created_at, 
+			c.id, c.user_id, c.post_id, c.text, c.media_url, c.created_at, 
 			pr.firstname, pr.lastname
         FROM forum.comments c
 		LEFT JOIN forum.profiles pr ON pr.user_id = c.user_id
@@ -233,7 +233,7 @@ func (pr *postgresRepository) GetComment(ctx context.Context, id int) (model.Com
 	var comment model.Comment
 	var firstname, lastname *string
 	err := pr.db.QueryRow(ctx, query, id).Scan(
-		&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &firstname, &lastname,
+		&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.MediaURL, &comment.CreatedAt, &firstname, &lastname,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -253,7 +253,7 @@ func (pr *postgresRepository) GetComment(ctx context.Context, id int) (model.Com
 func (pr *postgresRepository) GetComments(ctx context.Context, postID int, includeDeleted bool, limit, offset int) ([]model.Comment, error) {
 	const queryAll = `
 		SELECT 
-			c.id, c.user_id, c.post_id, c.text, c.created_at, 
+			c.id, c.user_id, c.post_id, c.text, c.media_url, c.created_at, 
 			pr.firstname, pr.lastname
         FROM forum.comments c
 		LEFT JOIN forum.profiles pr ON pr.user_id = c.user_id
@@ -263,7 +263,7 @@ func (pr *postgresRepository) GetComments(ctx context.Context, postID int, inclu
 	`
 	const queryActive = `
 		SELECT 
-			c.id, c.user_id, c.post_id, c.text, c.created_at, 
+			c.id, c.user_id, c.post_id, c.text, c.media_url, c.created_at, 
 			pr.firstname, pr.lastname
         FROM forum.comments c
 		LEFT JOIN forum.profiles pr ON pr.user_id = c.user_id
@@ -289,7 +289,7 @@ func (pr *postgresRepository) GetComments(ctx context.Context, postID int, inclu
 		var comment model.Comment
 		var firstname, lastname *string
 		err = rows.Scan(
-			&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &firstname, &lastname,
+			&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.MediaURL, &comment.CreatedAt, &firstname, &lastname,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("GetComments scan: %w", err)
@@ -366,13 +366,13 @@ func (pr *postgresRepository) RestoreBoard(ctx context.Context, id int) error {
 
 func (pr *postgresRepository) CreatePost(ctx context.Context, input model.CreatePostInput) (model.Post, error) {
 	const query = `
-		INSERT INTO forum.posts (user_id, board_id, title, text)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, user_id, board_id, title, text, created_at, deleted_at
+		INSERT INTO forum.posts (user_id, board_id, title, text, media_url)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, user_id, board_id, title, text, media_url, created_at, deleted_at
 	`
 	var post model.Post
-	err := pr.db.QueryRow(ctx, query, input.UserID, input.BoardID, input.Title, input.Text).Scan(
-		&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.CreatedAt, &post.DeletedAt,
+	err := pr.db.QueryRow(ctx, query, input.UserID, input.BoardID, input.Title, input.Text, input.MediaURL).Scan(
+		&post.ID, &post.UserID, &post.BoardID, &post.Title, &post.Text, &post.MediaURL, &post.CreatedAt, &post.DeletedAt,
 	)
 	if err != nil {
 		return model.Post{}, fmt.Errorf("CreatePost: %w", err)
@@ -401,13 +401,13 @@ func (pr *postgresRepository) DeletePost(ctx context.Context, id int) error {
 
 func (pr *postgresRepository) CreateComment(ctx context.Context, input model.CreateCommentInput) (model.Comment, error) {
 	const query = `
-		INSERT INTO forum.comments (user_id, post_id, text)
-		VALUES ($1, $2, $3)
-		RETURNING id, user_id, post_id, text, created_at, deleted_at
+		INSERT INTO forum.comments (user_id, post_id, text, media_url)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, user_id, post_id, text, media_url, created_at, deleted_at
 	`
 	var comment model.Comment
-	err := pr.db.QueryRow(ctx, query, input.UserID, input.PostID, input.Text).Scan(
-		&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.CreatedAt, &comment.DeletedAt,
+	err := pr.db.QueryRow(ctx, query, input.UserID, input.PostID, input.Text, input.MediaURL).Scan(
+		&comment.ID, &comment.UserID, &comment.PostID, &comment.Text, &comment.MediaURL, &comment.CreatedAt, &comment.DeletedAt,
 	)
 	if err != nil {
 		return model.Comment{}, fmt.Errorf("CreateComment: %w", err)

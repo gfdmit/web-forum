@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS forum.posts (
     board_id        BIGINT NOT NULL REFERENCES forum.boards(id) ON DELETE CASCADE,
     title           TEXT NOT NULL,
     text            TEXT NOT NULL,
+    media_url       TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at      TIMESTAMPTZ
@@ -54,6 +55,7 @@ CREATE TABLE IF NOT EXISTS forum.comments (
     user_id         BIGINT REFERENCES forum.users(id) ON DELETE SET NULL,
     post_id         BIGINT NOT NULL REFERENCES forum.posts(id) ON DELETE CASCADE,
     text            TEXT NOT NULL,
+    media_url       TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at      TIMESTAMPTZ
 );

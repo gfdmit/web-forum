@@ -8,12 +8,14 @@ type Comment struct {
 	Author    *Author    `json:"authon,omitempty"`
 	PostID    int        `json:"post_id"`
 	Text      string     `json:"text"`
+	MediaURL  *string    `json:"media_url,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 type CreateCommentInput struct {
-	UserID *int   `json:"-"`
-	PostID int    `json:"post_id"`
-	Text   string `json:"text"`
+	UserID   *int    `json:"-"`
+	PostID   int     `json:"post_id"`
+	Text     string  `json:"text"`
+	MediaURL *string `json:"media_url,omitempty"`
 }

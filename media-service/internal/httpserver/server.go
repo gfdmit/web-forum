@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gfdmit/web-forum/post-service/config"
+	"github.com/gfdmit/web-forum/media-service/config"
 )
 
 type Server struct {

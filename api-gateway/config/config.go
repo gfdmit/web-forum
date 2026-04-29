@@ -11,7 +11,7 @@ import (
 type Config struct {
 	PostService
 	AuthService
-	//MediaService
+	MediaService
 	HTTPServer
 }
 
@@ -24,6 +24,11 @@ type AuthService struct {
 	Host string `env:"AUTHSERVICE_HOST" env-default:"localhost"`
 	Port string `env:"AUTHSERVICE_PORT" env-default:"4000"`
 	JWT
+}
+
+type MediaService struct {
+	Host string `env:"MEDIASERVICE_HOST" env-default:"localhost"`
+	Port string `env:"MEDIASERVICE_PORT" env-default:"2000"`
 }
 
 type JWT struct {

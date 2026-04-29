@@ -18,7 +18,7 @@ func New(conf *config.Config) (*gin.Engine, error) {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "DELETE"},
-		AllowHeaders:     []string{"Origin", "Content-Type"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		AllowCredentials: false,
 		MaxAge:           2 * time.Hour,
 	}))
@@ -26,6 +26,7 @@ func New(conf *config.Config) (*gin.Engine, error) {
 	router.GET("/ping", pingHandler(map[string]string{
 		"auth":  fmt.Sprintf("http://%s:%s/ping", conf.AuthService.Host, conf.AuthService.Port),
 		"posts": fmt.Sprintf("http://%s:%s/ping", conf.PostService.Host, conf.PostService.Port),
+		"media": fmt.Sprintf("http://%s:%s/ping", conf.MediaService.Host, conf.MediaService.Port),
 	}))
 
 	postProxy, err := proxy.New(fmt.Sprintf("http://%s:%s", conf.PostService.Host, conf.PostService.Port))
@@ -38,12 +39,17 @@ func New(conf *config.Config) (*gin.Engine, error) {
 		return nil, fmt.Errorf("proxy.New auth: %w", err)
 	}
 
+	mediaProxy, err := proxy.New(fmt.Sprintf("http://%s:%s", conf.MediaService.Host, conf.MediaService.Port))
+	if err != nil {
+		return nil, fmt.Errorf("proxy.New media: %w", err)
+	}
+
 	api := router.Group("/api/v1")
 
 	public := api.Group("")
 	{
 		public.POST("/auth/login", authProxy.Forward())
-		public.POST("/auth/logout", authProxy.Forward())
+		public.GET("/media/:filename", mediaProxy.Forward())
 
 		public.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
 
@@ -56,14 +62,18 @@ func New(conf *config.Config) (*gin.Engine, error) {
 		public.GET("/posts/:id/comments", postProxy.Forward())
 		public.GET("/comments/:id", postProxy.Forward())
 
-		public.GET("profiles", postProxy.Forward())
-		public.GET("profiles/:id", postProxy.Forward())
+		public.GET("/profiles", postProxy.Forward())
+		public.GET("/profiles/:id", postProxy.Forward())
 	}
 
 	protected := api.Group("")
-	protected.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
 	protected.Use(middleware.Auth(conf.JWT.Secret))
 	{
+		protected.POST("/auth/logout", authProxy.Forward())
+		protected.POST("/media/upload", mediaProxy.Forward())
+
+		protected.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
+
 		protected.POST("/boards", postProxy.Forward())
 		protected.DELETE("/boards/:id", postProxy.Forward())
 		protected.POST("/boards/:id/restore", postProxy.Forward())
