@@ -71,6 +71,33 @@ func New(ctx context.Context, conf *config.Postgres) (repository.Repository, err
 	}, nil
 }
 
+func (pr *postgresRepository) GetStats(ctx context.Context) (model.Stats, error) {
+	const query1 = `
+        SELECT COUNT(*)
+        FROM forum.boards
+        WHERE deleted_at IS NULL
+    `
+	const query2 = `
+        SELECT COUNT(*)
+        FROM forum.posts
+    `
+	var boardsCount, postsCount int
+	err := pr.db.QueryRow(ctx, query1).Scan(
+		&boardsCount,
+	)
+	if err != nil {
+		return model.Stats{}, fmt.Errorf("GetStats: %w", err)
+	}
+
+	err = pr.db.QueryRow(ctx, query2).Scan(
+		&postsCount,
+	)
+	if err != nil {
+		return model.Stats{}, fmt.Errorf("GetStats: %w", err)
+	}
+	return model.Stats{BoardsCount: boardsCount, PostsCount: postsCount}, nil
+}
+
 func (pr *postgresRepository) GetBoard(ctx context.Context, id int) (model.Board, error) {
 	const query = `
         SELECT id, name, description, created_at, deleted_at

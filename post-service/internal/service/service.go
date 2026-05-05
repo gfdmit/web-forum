@@ -32,6 +32,8 @@ type Service interface {
 
 	GetProfile(ctx context.Context, userID int) (model.Profile, error)
 	GetProfiles(ctx context.Context, includeDeleted bool) ([]model.Profile, error)
+
+	GetStats(ctx context.Context) (model.Stats, error)
 }
 
 type service struct {
@@ -40,6 +42,10 @@ type service struct {
 
 func New(repo repository.Repository) Service {
 	return &service{repo: repo}
+}
+
+func (svc *service) GetStats(ctx context.Context) (model.Stats, error) {
+	return svc.repo.GetStats(ctx)
 }
 
 func (svc *service) GetBoard(ctx context.Context, id int) (model.Board, error) {

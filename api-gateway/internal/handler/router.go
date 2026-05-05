@@ -53,6 +53,8 @@ func New(conf *config.Config) (*gin.Engine, error) {
 
 		public.Use(middleware.RewritePrefix("/api/v1", "/api/v2"))
 
+		public.GET("/stats", postProxy.Forward())
+
 		public.GET("/boards", postProxy.Forward())
 		public.GET("/boards/:id", postProxy.Forward())
 

@@ -19,6 +19,8 @@ func NewRouter(svc service.Service) *gin.Engine {
 
 	api := router.Group("/api/v2")
 	{
+		api.GET("/stats", h.GetStats)
+
 		api.GET("/boards", h.GetBoards)
 		api.GET("/boards/:id", h.GetBoard)
 		api.POST("/boards", h.CreateBoard)

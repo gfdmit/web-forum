@@ -30,4 +30,6 @@ type Repository interface {
 
 	GetProfile(ctx context.Context, userID int) (model.Profile, error)
 	GetProfiles(ctx context.Context, includeDeleted bool) ([]model.Profile, error)
+
+	GetStats(ctx context.Context) (model.Stats, error)
 }

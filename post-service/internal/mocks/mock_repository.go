@@ -979,6 +979,66 @@ func (_c *MockRepository_GetProfiles_Call) RunAndReturn(run func(ctx context.Con
 	return _c
 }
 
+// GetStats provides a mock function for the type MockRepository
+func (_mock *MockRepository) GetStats(ctx context.Context) (model.Stats, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetStats")
+	}
+
+	var r0 model.Stats
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (model.Stats, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) model.Stats); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		r0 = ret.Get(0).(model.Stats)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRepository_GetStats_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetStats'
+type MockRepository_GetStats_Call struct {
+	*mock.Call
+}
+
+// GetStats is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockRepository_Expecter) GetStats(ctx interface{}) *MockRepository_GetStats_Call {
+	return &MockRepository_GetStats_Call{Call: _e.mock.On("GetStats", ctx)}
+}
+
+func (_c *MockRepository_GetStats_Call) Run(run func(ctx context.Context)) *MockRepository_GetStats_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepository_GetStats_Call) Return(stats model.Stats, err error) *MockRepository_GetStats_Call {
+	_c.Call.Return(stats, err)
+	return _c
+}
+
+func (_c *MockRepository_GetStats_Call) RunAndReturn(run func(ctx context.Context) (model.Stats, error)) *MockRepository_GetStats_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RestoreBoard provides a mock function for the type MockRepository
 func (_mock *MockRepository) RestoreBoard(ctx context.Context, id int) error {
 	ret := _mock.Called(ctx, id)

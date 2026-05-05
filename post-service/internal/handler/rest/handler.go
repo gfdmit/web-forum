@@ -16,6 +16,15 @@ func New(svc service.Service) *Handler {
 	return &Handler{svc: svc}
 }
 
+func (h *Handler) GetStats(c *gin.Context) {
+	stats, err := h.svc.GetStats(c.Request.Context())
+	if err != nil {
+		handleError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, stats)
+}
+
 func (h *Handler) GetBoards(c *gin.Context) {
 	includeDeleted := c.Query("includeDeleted") == "true"
 
